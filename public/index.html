@@ -348,18 +348,16 @@
                 });
 
                 if (response.ok) {
-                    messageInput.value = '';
-                    messageInput.style.height = '44px';
-
                     // Refresh after short delay
                     setTimeout(loadSnapshot, 500);
-                } else {
-                    const error = await response.json();
-                    alert(`Failed to send: ${error.reason || 'Unknown error'}`);
                 }
+                // No alert on failure - user can try again, avoids annoying popups during AI generation
             } catch (err) {
-                alert('Failed to send message');
+                // Network error - ignore, user can try again
             } finally {
+                // Always clear and reset regardless of outcome
+                messageInput.value = '';
+                messageInput.style.height = '44px';
                 sendBtn.disabled = false;
                 sendBtn.textContent = 'Send';
             }

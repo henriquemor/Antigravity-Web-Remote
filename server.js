@@ -130,7 +130,10 @@ async function captureSnapshot(cdp) {
             });
 
             if (result.result && result.result.value) {
-                return result.result.value;
+                const snapshot = result.result.value;
+                // Skip contexts that return error (e.g. cascade not found)
+                if (snapshot.error) continue;
+                return snapshot;
             }
         } catch (e) { }
     }
@@ -147,7 +150,7 @@ async function injectMessage(cdp, text) {
         const editors = [...document.querySelectorAll('#cascade [data-lexical-editor="true"][contenteditable="true"][role="textbox"]')]
             .filter(el => el.offsetParent !== null);
         const editor = editors.at(-1);
-        if (!editor) return { ok:false, error:"editor_not_found" };
+        if (!editor) return { ok:false, reason:"editor_not_found" };
 
         editor.focus();
         document.execCommand?.("selectAll", false, null);
