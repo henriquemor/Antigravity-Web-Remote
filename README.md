@@ -66,3 +66,5 @@ http://<your-local-ip>:3000
 This is over local network, so it will not work if you are on a different network, unless you use a VPN or something.
 
 The interface will automatically connect and display your Antigravity conversation in almost real-time.
+
+Thanks to https://github.com/lukasz-wronski for finding bugs and https://github.com/Mario4272 for the original idea. 

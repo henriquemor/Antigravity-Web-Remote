@@ -3,8 +3,9 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Antigravity Monitor</title>
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Antigravity Shit-Chat</title>
     <style>
         * {
             margin: 0;
@@ -14,125 +15,81 @@
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #1a1a1a;
-            color: #fff;
+            background: #1a1a1a !important;
+            color: #fff !important;
             height: 100vh;
+            /* Fallback */
+            height: 100dvh;
+            /* Dynamic constraint */
             display: flex;
             flex-direction: column;
             overflow: hidden;
+            margin: 0 !important;
         }
 
-        /* Header */
-        .header {
-            background: #2a2a2a;
+        /* Cascade Selector / Header */
+        .headers-container {
+            background: #2a2a2a !important;
+            border-bottom: 1px solid #3a3a3a !important;
+            position: relative;
+            z-index: 100;
+            display: flex;
+            overflow-x: auto;
+            white-space: nowrap;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .cascade-tab {
             padding: 12px 16px;
-            border-bottom: 1px solid #3a3a3a;
+            cursor: pointer;
+            border-right: 1px solid #3a3a3a;
+            opacity: 0.6;
+            transition: all 0.2s;
+            font-size: 14px;
             display: flex;
-            justify-content: space-between;
             align-items: center;
-            flex-shrink: 0;
+            gap: 6px;
         }
 
-        .header h1 {
-            font-size: 16px;
-            font-weight: 600;
+        .cascade-tab.active {
+            opacity: 1;
+            background: #333;
+            border-bottom: 2px solid #3b82f6;
         }
 
-        .controls {
-            display: flex;
-            gap: 8px;
-            align-items: center;
-        }
-
-        .status-indicator {
+        .cascade-tab .status {
             width: 8px;
             height: 8px;
             border-radius: 50%;
             background: #666;
-            transition: background 0.3s;
         }
 
-        .status-indicator.connected {
+        .cascade-tab.active-window .status {
             background: #4ade80;
         }
 
-        .status-indicator.paused {
-            background: #fbbf24;
-        }
+        /* Green if optimized/active window */
 
-        button {
-            background: #3a3a3a;
-            border: 1px solid #4a4a4a;
-            color: #fff;
-            padding: 6px 12px;
-            border-radius: 6px;
-            font-size: 13px;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-
-        button:active {
-            transform: scale(0.95);
-        }
-
-        button:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-
-        button.primary {
-            background: #3b82f6;
-            border-color: #2563eb;
-        }
-
-        /* Chat Container */
         .chat-container {
             flex: 1;
             overflow-y: auto;
-            overflow-x: hidden;
             position: relative;
-            -webkit-overflow-scrolling: touch;
         }
 
         .chat-content {
-            min-height: 100%;
             padding: 16px;
+            min-height: 100%;
         }
 
-        .loading {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100%;
-            color: #666;
-        }
-
-        .pause-banner {
-            position: sticky;
-            top: 0;
-            background: #fbbf24;
-            color: #000;
-            padding: 8px 16px;
-            text-align: center;
-            font-size: 13px;
-            font-weight: 500;
-            z-index: 100;
-            display: none;
-        }
-
-        .pause-banner.show {
-            display: block;
-        }
-
-        /* Input Section */
         .input-section {
-            background: #2a2a2a;
-            border-top: 1px solid #3a3a3a;
-            padding: 12px 16px;
-            flex-shrink: 0;
-        }
-
-        .input-wrapper {
+            background: #2a2a2a !important;
+            padding: 12px;
+            /* Account for mobile safe areas */
+            padding-bottom: calc(12px + env(safe-area-inset-bottom));
+            border-top: 1px solid #3a3a3a !important;
+            position: relative;
+            z-index: 1000;
+            /* Increased z-index */
             display: flex;
             gap: 8px;
         }
@@ -141,273 +98,174 @@
             flex: 1;
             background: #1a1a1a;
             border: 1px solid #3a3a3a;
-            color: #fff !important;
-            /* Force white text */
-            padding: 10px 12px;
-            border-radius: 8px;
-            font-size: 14px;
-            font-family: inherit;
+            color: white;
+            padding: 8px;
+            border-radius: 6px;
             resize: none;
-            min-height: 44px;
-            max-height: 120px;
+            height: 40px;
         }
 
-        textarea::placeholder {
-            color: #888;
-        }
-
-        textarea:focus {
-            outline: none;
-            border-color: #3b82f6;
-        }
-
-        .send-btn {
-            align-self: flex-end;
-            padding: 10px 20px;
+        button {
+            padding: 0 20px;
+            background: #3b82f6;
+            border: none;
+            color: white;
+            border-radius: 6px;
             font-weight: 600;
         }
 
-        /* Floating Action Button */
-        .fab {
-            position: fixed;
-            bottom: 80px;
-            right: 16px;
-            width: 48px;
-            height: 48px;
-            border-radius: 50%;
-            background: #3b82f6;
-            border: none;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-            display: none;
-            align-items: center;
-            justify-content: center;
-            font-size: 20px;
-            cursor: pointer;
-            z-index: 1000;
+        .loading {
+            text-align: center;
+            color: #666;
+            margin-top: 50px;
         }
-
-        .fab.show {
-            display: flex;
-        }
-
-        /* Responsive */
-        @media (max-width: 640px) {
-            .header h1 {
-                font-size: 14px;
-            }
-        }
+    </style>
+    <style id="cascade-style">
+        /* Dynamic styles will be injected here */
     </style>
 </head>
 
 <body>
-    <!-- Chat Container -->
+
+    <div class="headers-container" id="tabsContainer">
+        <!-- Tabs injected here -->
+        <div class="cascade-tab">Loading...</div>
+    </div>
+
     <div class="chat-container" id="chatContainer">
         <div class="chat-content" id="chatContent">
-            <div class="loading">Loading chat...</div>
+            <div class="loading">Waiting for connection...</div>
         </div>
     </div>
 
-    <!-- Scroll to Bottom FAB -->
-    <button class="fab" id="scrollToBottom">↓</button>
-
-    <!-- Input Section -->
     <div class="input-section">
-        <div class="input-wrapper">
-            <textarea id="messageInput" placeholder="Type a message..." rows="1"></textarea>
-            <button class="send-btn primary" id="sendBtn">Send</button>
-        </div>
+        <textarea id="messageInput" placeholder="Type a message..."></textarea>
+        <button id="sendBtn">Send</button>
     </div>
 
     <script>
-        const chatContainer = document.getElementById('chatContainer');
+        const tabsContainer = document.getElementById('tabsContainer');
         const chatContent = document.getElementById('chatContent');
-        const messageInput = document.getElementById('messageInput');
-        const sendBtn = document.getElementById('sendBtn');
-        const scrollToBottomBtn = document.getElementById('scrollToBottom');
+        const chatContainer = document.getElementById('chatContainer');
 
-        let autoRefreshEnabled = true;
-        let userIsScrolling = false;
-        let lastScrollPosition = 0;
+        let cascades = [];
+        let currentCascadeId = null;
         let ws = null;
-        let idleTimer = null;
 
-        // WebSocket connection
-        function connectWebSocket() {
-            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            ws = new WebSocket(`${protocol}//${window.location.host}`);
-
-            ws.onopen = () => {
-                console.log('WebSocket connected');
-                loadSnapshot();
-            };
+        function connect() {
+            ws = new WebSocket(`ws://${location.host}`);
 
             ws.onmessage = (event) => {
                 const data = JSON.parse(event.data);
-                if (data.type === 'snapshot_update' && autoRefreshEnabled && !userIsScrolling) {
-                    loadSnapshot();
+
+                if (data.type === 'cascade_list') {
+                    cascades = data.cascades;
+                    renderTabs();
+
+                    // Auto-select first if none selected
+                    if (!currentCascadeId && cascades.length > 0) {
+                        selectCascade(cascades[0].id);
+                    }
+                }
+
+                if (data.type === 'snapshot_update') {
+                    if (data.cascadeId === currentCascadeId) {
+                        updateContentOnly(currentCascadeId);
+                    }
                 }
             };
 
-            ws.onclose = () => {
-                console.log('WebSocket disconnected');
-                setTimeout(connectWebSocket, 2000);
-            };
+            ws.onclose = () => setTimeout(connect, 2000);
         }
 
-        // Load snapshot
-        async function loadSnapshot() {
-            try {
-                const response = await fetch('/snapshot');
-                if (!response.ok) throw new Error('Failed to load snapshot');
+        function renderTabs() {
+            tabsContainer.innerHTML = cascades.map(c => `
+                <div class="cascade-tab ${c.id === currentCascadeId ? 'active' : ''} ${c.active ? 'active-window' : ''}" 
+                     onclick="selectCascade('${c.id}')">
+                    <div class="status"></div>
+                    ${c.title || 'Untitled'}
+                </div>
+            `).join('');
 
-                const data = await response.json();
-
-                // Save scroll position
-                const scrollPos = chatContainer.scrollTop;
-                const isNearBottom = chatContainer.scrollHeight - chatContainer.scrollTop - chatContainer.clientHeight < 100;
-
-                // Apply body background from Antigravity (cascade is transparent)
-                const bodyBg = data.bodyBg || '#1e1e1e';
-                const bodyColor = data.bodyColor || '#cccccc';
-
-                // Apply to webview body too
-                document.body.style.backgroundColor = bodyBg;
-                document.body.style.color = bodyColor;
-
-                // Update content
-                chatContent.innerHTML = `
-                    <style>
-                        ${data.css}
-                        
-                        /* Apply actual theme colors from Antigravity */
-                        #cascade {
-                            background-color: ${bodyBg};
-                            color: ${bodyColor};
-                            position: relative !important;
-                        }
-                        
-                        /* Override positioning for everything else */
-                        #cascade * {
-                            position: static !important;
-                        }
-                        
-                        /* Force text color on cascade children, but NOT code blocks (preserve syntax highlighting) */
-                        #cascade *:not(pre):not(code):not(pre *):not([class*="hljs"]):not([class*="shiki"]):not([class*="token"]) {
-                            color: ${bodyColor};
-                        }
-                        
-                        /* Code blocks stay dark regardless of theme */
-                        pre, code, #cascade pre, #cascade code,
-                        [class*="hljs"], [class*="shiki"] {
-                            background-color: #1e1e1e !important;
-                            color: #d4d4d4 !important;
-                        }
-                        
-                        pre code {
-                            background-color: transparent !important;
-                        }
-                        
-                        /* Terminal/console areas */
-                        [class*="terminal"], [class*="console"] {
-                            background-color: #1e1e1e !important;
-                            color: #d4d4d4 !important;
-                        }
-                    </style>
-                    ${data.html}
-                `;
-
-                // Restore scroll position or scroll to bottom
-                if (isNearBottom || scrollPos === 0) {
-                    chatContainer.scrollTop = chatContainer.scrollHeight;
-                } else {
-                    chatContainer.scrollTop = scrollPos;
-                }
-
-            } catch (err) {
-                console.error('Failed to load snapshot:', err);
-                chatContent.innerHTML = `<div class="loading">Failed to load chat. <button onclick="loadSnapshot()">Retry</button></div>`;
+            if (cascades.length === 0) {
+                tabsContainer.innerHTML = '<div class="cascade-tab">No chats found</div>';
             }
         }
 
-        // Send message
-        async function sendMessage() {
-            const message = messageInput.value.trim();
-            if (!message) return;
+        function selectCascade(id) {
+            currentCascadeId = id;
+            renderTabs();
+            loadCascade(id);
+        }
 
-            sendBtn.disabled = true;
-            sendBtn.textContent = 'Sending...';
+        async function loadCascade(id) {
+            try {
+                // 1. Fetch Styles (Once)
+                const styleRes = await fetch(`/styles/${id}`);
+                if (styleRes.ok) {
+                    const styleData = await styleRes.json();
+                    document.getElementById('cascade-style').textContent = `
+                        ${styleData.css}
+                        #cascade { background: transparent !important; color: white; }
+                        /* Ensure code blocks are readable */
+                        pre, code { background: #111 !important; color: #ddd !important; }
+                    `;
+                }
+
+                // 2. Fetch Content
+                await updateContentOnly(id);
+            } catch (e) { console.error(e); }
+        }
+
+        async function updateContentOnly(id) {
+            try {
+                const res = await fetch(`/snapshot/${id}`);
+                if (!res.ok) throw new Error('Failed');
+                const data = await res.json();
+
+                // Preserve Scroll
+                const isAtBottom = chatContainer.scrollHeight - chatContainer.scrollTop - chatContainer.clientHeight < 50;
+
+                document.body.style.backgroundColor = data.bodyBg || '#1a1a1a';
+                chatContent.innerHTML = data.html;
+                // No inner style block needed anymore
+
+                if (isAtBottom) chatContainer.scrollTop = chatContainer.scrollHeight;
+            } catch (e) { }
+        }
+
+        async function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const text = input.value;
+            if (!text || !currentCascadeId) return;
+
+            // Clear immediately to feel responsive
+            input.value = '';
 
             try {
-                const response = await fetch('/send', {
+                await fetch(`/send/${currentCascadeId}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message })
+                    body: JSON.stringify({ message: text })
                 });
-
-                if (response.ok) {
-                    // Refresh after short delay
-                    setTimeout(loadSnapshot, 500);
-                }
-                // No alert on failure - user can try again, avoids annoying popups during AI generation
-            } catch (err) {
-                // Network error - ignore, user can try again
-            } finally {
-                // Always clear and reset regardless of outcome
-                messageInput.value = '';
-                messageInput.style.height = '44px';
-                sendBtn.disabled = false;
-                sendBtn.textContent = 'Send';
+                updateContentOnly(currentCascadeId); // Immediate refresh try
+            } catch (e) {
+                console.error("Send failed", e);
+                input.value = text; // Restore on fail
+                alert("Failed to send message: " + e.message);
             }
         }
 
+        document.getElementById('sendBtn').onclick = sendMessage;
 
-
-        // Detect user scrolling
-        let scrollTimeout;
-        chatContainer.addEventListener('scroll', () => {
-            userIsScrolling = true;
-            clearTimeout(scrollTimeout);
-            clearTimeout(idleTimer);
-
-            // Show scroll to bottom button if not at bottom
-            const isNearBottom = chatContainer.scrollHeight - chatContainer.scrollTop - chatContainer.clientHeight < 100;
-            scrollToBottomBtn.classList.toggle('show', !isNearBottom);
-
-            // Resume after 10 seconds of idle
-            scrollTimeout = setTimeout(() => {
-                userIsScrolling = false;
-            }, 500);
-
-            idleTimer = setTimeout(() => {
-                autoRefreshEnabled = true;
-            }, 10000);
-        });
-
-        // Scroll to bottom
-        scrollToBottomBtn.addEventListener('click', () => {
-            chatContainer.scrollTo({
-                top: chatContainer.scrollHeight,
-                behavior: 'smooth'
-            });
-        });
-
-        // Send message handlers
-        sendBtn.addEventListener('click', sendMessage);
-        messageInput.addEventListener('keydown', (e) => {
+        document.getElementById('messageInput').addEventListener('keydown', (e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
                 sendMessage();
             }
         });
 
-        // Auto-resize textarea
-        messageInput.addEventListener('input', () => {
-            messageInput.style.height = '44px';
-            messageInput.style.height = Math.min(messageInput.scrollHeight, 120) + 'px';
-        });
-
-        // Initialize
-        connectWebSocket();
+        connect();
     </script>
 </body>
 
