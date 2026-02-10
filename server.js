@@ -818,17 +818,36 @@ async function main() {
             const gi = fs.readFileSync(join(projectPath, '.gitignore'), 'utf8');
             gitignorePatterns = gi.split('\n')
                 .map(l => l.trim())
-                .filter(l => l && !l.startsWith('#'))
-                .map(l => l.replace(/\/$/, '')); // strip trailing slash
+                .filter(l => l && !l.startsWith('#'));
         } catch (e) { /* no .gitignore */ }
 
         const excludes = [...new Set([...defaultExcludes, ...gitignorePatterns])];
 
-        function shouldExclude(name) {
-            for (const pattern of excludes) {
-                if (pattern === name) return true;
-                // Simple glob: *.ext
-                if (pattern.startsWith('*') && name.endsWith(pattern.slice(1))) return true;
+        function shouldExclude(relPath, isDir) {
+            for (let pattern of excludes) {
+                if (!pattern || pattern.startsWith('#')) continue;
+
+                // Handle directory-only patterns (ending in /)
+                const mustBeDir = pattern.endsWith('/');
+                let p = mustBeDir ? pattern.slice(0, -1) : pattern;
+
+                if (mustBeDir && !isDir) continue;
+
+                // If pattern contains a slash (other than at the end), it's relative to the root
+                if (p.includes('/')) {
+                    // Strip leading slash if present for comparison
+                    if (p.startsWith('/')) p = p.slice(1);
+                    if (relPath === p || relPath.startsWith(p + '/')) return true;
+                } else {
+                    // No slash: matches any file/folder by name
+                    const name = relPath.split('/').pop();
+                    if (p.includes('*')) {
+                        const regex = new RegExp('^' + p.replace(/\./g, '\\.').replace(/\*/g, '.*') + '$');
+                        if (regex.test(name)) return true;
+                    } else if (name === p) {
+                        return true;
+                    }
+                }
             }
             return false;
         }
@@ -840,20 +859,24 @@ async function main() {
 
             const result = [];
             for (const entry of entries) {
-                if (shouldExclude(entry.name)) continue;
+                const fullPath = join(dir, entry.name);
+                const relPath = relative(projectPath, fullPath).replace(/\\/g, '/');
+                const isDir = entry.isDirectory();
 
-                if (entry.isDirectory()) {
+                if (shouldExclude(relPath, isDir)) continue;
+
+                if (isDir) {
                     result.push({
                         name: entry.name,
                         type: 'dir',
-                        path: relative(projectPath, join(dir, entry.name)).replace(/\\/g, '/'),
-                        children: walk(join(dir, entry.name))
+                        path: relPath,
+                        children: walk(fullPath)
                     });
                 } else {
                     result.push({
                         name: entry.name,
                         type: 'file',
-                        path: relative(projectPath, join(dir, entry.name)).replace(/\\/g, '/')
+                        path: relPath
                     });
                 }
             }
