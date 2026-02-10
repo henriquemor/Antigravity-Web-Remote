@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport"
         content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Antigravity Shit-Chat</title>
+    <title>💬 Antigravity Web Remote</title>
     <style>
         * {
             margin: 0;
@@ -14,7 +14,7 @@
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-family: 'Segoe UI', sans-serif !important;
             background: #1a1a1a !important;
             color: #fff !important;
             height: 100vh;
@@ -49,6 +49,7 @@
             display: flex;
             align-items: center;
             gap: 6px;
+            font-weight: 500;
         }
 
         .cascade-tab.active {
@@ -57,11 +58,9 @@
             border-bottom: 2px solid #3b82f6;
         }
 
+        /* Removed status dots and icons as requested */
         .cascade-tab .status {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background: #666;
+            display: none;
         }
 
         .cascade-tab.active-window .status {
@@ -77,8 +76,30 @@
         }
 
         .chat-content {
-            padding: 16px;
+            padding: 0; /* Let mirror handle padding or set minimal */
             min-height: 100%;
+        }
+
+        /* Mirror Cleanup Fixes */
+        .chat-content [class*="monaco-scrollable-element"] {
+            padding-bottom: 0 !important;
+            margin-bottom: 0 !important;
+        }
+        
+        .chat-content .scrollbar, 
+        .chat-content .invisible-scrollbar {
+            display: none !important;
+        }
+
+        .chat-content [class*="input-container"],
+        .chat-content [class*="footer"],
+        .chat-content [class*="header"]:not(.chat-title) {
+            display: none !important;
+        }
+
+        /* Prevent extra space from virtualization spacers if they leaked */
+        .chat-content div[style*="height"] {
+            max-height: 100vh;
         }
 
         .input-section {
@@ -99,10 +120,15 @@
             background: #1a1a1a;
             border: 1px solid #3a3a3a;
             color: white;
-            padding: 8px;
+            padding: 10px !important;
             border-radius: 6px;
             resize: none;
-            height: 40px;
+            height: 100px;
+            font-size: 13px;
+        }
+
+        .prose {
+            color: #c3d9c4 !important;
         }
 
         button {
@@ -118,6 +144,392 @@
             text-align: center;
             color: #666;
             margin-top: 50px;
+        }
+
+        /* Make buttons in chat content clickable */
+        .chat-content button {
+            cursor: pointer;
+        }
+
+        /* Toast notifications */
+        .toast {
+            position: fixed;
+            bottom: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #ef4444;
+            color: white;
+            padding: 12px 40px 12px 16px;
+            border-radius: 8px;
+            font-size: 14px;
+            z-index: 9999;
+            animation: fadeIn 0.2s;
+            max-width: 90%;
+        }
+
+        .toast .close {
+            position: absolute;
+            right: 8px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            color: white;
+            font-size: 18px;
+            cursor: pointer;
+            padding: 4px 8px;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateX(-50%) translateY(10px);
+            }
+        }
+
+        /* Diff Highlighting */
+        .diff-line {
+            font-family: 'Cascadia Code', 'Source Code Pro', monospace;
+            white-space: pre-wrap;
+            font-size: 13px;
+            line-height: 1.5;
+            padding: 0 4px;
+        }
+
+        .diff-added {
+            color: #4ade80;
+            background: rgba(74, 222, 128, 0.1);
+        }
+
+        .diff-removed {
+            color: #f87171;
+            background: rgba(248, 113, 113, 0.1);
+        }
+
+        .diff-header {
+            color: #60a5fa;
+            font-weight: bold;
+            background: rgba(96, 165, 250, 0.05);
+            display: block;
+            margin-top: 8px;
+            padding: 4px;
+            border-radius: 4px;
+        }
+
+        .diff-meta {
+            color: #9ca3af;
+            font-style: italic;
+        }
+
+        .file-list-item {
+            padding: 8px;
+            border-bottom: 1px solid #333;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .file-list-item:hover {
+            background: #333;
+        }
+
+        .file-status {
+            font-weight: bold;
+            min-width: 25px;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+            padding: 2px 4px;
+            background: rgba(255,255,255,0.05);
+        }
+
+        .status-staged {
+            background: #059669 !important;
+            color: white !important;
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 10px;
+            text-transform: uppercase;
+            font-weight: 800;
+        }
+
+        .status-M { color: #fbbf24; }
+        .status-A { color: #4ade80; }
+        .status-D { color: #f87171; }
+        .status-untracked { color: #9ca3af; }
+
+        .file-actions {
+            margin-left: auto;
+            display: flex;
+            gap: 6px;
+        }
+
+        .action-btn {
+            background: transparent;
+            border: 1px solid #444;
+            padding: 4px 8px;
+            font-size: 11px;
+            border-radius: 4px;
+            cursor: pointer;
+            color: #ccc;
+        }
+
+        .action-btn:hover {
+            background: #444;
+            color: white;
+        }
+
+        .action-btn.stage { color: #4ade80; border-color: rgba(74, 222, 128, 0.3); }
+        .action-btn.unstage { color: #f87171; border-color: rgba(248, 113, 113, 0.3); }
+
+        #commitSection {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #333;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        #commitMsg {
+            background: #1a1a1a;
+            border: 1px solid #333;
+            color: white;
+            padding: 10px;
+            border-radius: 6px;
+            min-height: 60px;
+            font-size: 13px;
+        }
+
+        #rawEditor {
+            width: 100%;
+            height: 400px;
+            background: #0a0a0a;
+            color: #c3d9c4;
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 15px;
+            font-family: 'Cascadia Code', monospace;
+            font-size: 13px;
+            line-height: 1.6;
+            margin-top: 10px;
+            resize: vertical;
+        }
+
+        #gitContent {
+            background: #111;
+            border-radius: 8px;
+            padding: 12px;
+            margin-top: 12px;
+            overflow-x: auto;
+        }
+
+        .diff-no-wrap .diff-line {
+            white-space: pre !important;
+        }
+
+
+
+        /* Explorer */
+        #explorerView {
+            display: none;
+            padding: 0;
+            height: 100%;
+            overflow-y: auto;
+        }
+
+        .explorer-path-bar {
+            display: flex;
+            gap: 8px;
+            padding: 12px;
+            border-bottom: 1px solid #333;
+            background: #1e1e1e;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        .explorer-path-bar input {
+            flex: 1;
+            background: #1a1a1a;
+            border: 1px solid #3a3a3a;
+            color: white;
+            padding: 8px;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        .explorer-tree {
+            padding: 4px 0;
+        }
+
+        .tree-item {
+            display: flex;
+            align-items: center;
+            padding: 3px 8px;
+            cursor: pointer;
+            user-select: none;
+            font-size: 13px;
+            color: #ccc;
+            transition: background 0.1s;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .tree-item:hover {
+            background: #2a2d2e;
+        }
+
+        .tree-item.selected {
+            background: #094771;
+            color: #fff;
+        }
+
+        .tree-chevron {
+            width: 16px;
+            height: 16px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            color: #888;
+            transition: transform 0.15s ease;
+            flex-shrink: 0;
+        }
+
+        .tree-chevron.open {
+            transform: rotate(90deg);
+        }
+
+        .tree-chevron.spacer {
+            visibility: hidden;
+        }
+
+        .tree-icon {
+            width: 18px;
+            height: 18px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 4px;
+            font-size: 14px;
+            flex-shrink: 0;
+        }
+
+        .tree-name {
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .tree-children {
+            display: none;
+        }
+
+        .tree-children.open {
+            display: block;
+        }
+
+        /* Explorer Editor */
+        .explorer-editor-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 16px;
+            background: #1e1e1e;
+            border-bottom: 1px solid #333;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        .explorer-editor-bar h3 {
+            color: #ccc;
+            font-size: 13px;
+            margin: 0;
+            font-weight: 400;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .file-badge {
+            background: #3b82f6;
+            color: white;
+            font-size: 11px;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+        /* Update Git History buttons */
+        #gitHistoryView button {
+            padding: 6px 14px;
+            font-size: 13px;
+        }
+
+        /* Update Commit Row padding */
+        .commit-row {
+            padding: 12px 10px;
+        }
+
+        .explorer-editor-btns {
+            display: flex;
+            gap: 8px;
+        }
+
+        .explorer-editor-btns button {
+            padding: 5px 14px;
+            font-size: 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            border: none;
+            font-weight: 600;
+        }
+
+        .btn-cancel {
+            background: #3a3a3a;
+            color: #ccc;
+        }
+
+        .btn-cancel:hover {
+            background: #505050;
+        }
+
+        .btn-save {
+            background: #059669;
+            color: white;
+        }
+
+        .btn-save:hover {
+            background: #047857;
+        }
+
+        #explorerEditor {
+            width: 100%;
+            min-height: calc(100vh - 120px);
+            background: #0d1117;
+            color: #c9d1d9;
+            border: none;
+            padding: 16px;
+            font-family: 'Cascadia Code', 'Fira Code', 'Source Code Pro', monospace;
+            font-size: 13px;
+            line-height: 1.6;
+            resize: none;
+            outline: none;
+            tab-size: 4;
+        }
+
+        .explorer-empty {
+            color: #666;
+            text-align: center;
+            padding: 40px 20px;
+            font-size: 14px;
         }
     </style>
     <style id="cascade-style">
@@ -136,6 +548,67 @@
         <div class="chat-content" id="chatContent">
             <div class="loading">Waiting for connection...</div>
         </div>
+        <div id="diffView" style="display:none; padding: 16px;">
+            <div style="margin-bottom: 12px; display:flex; gap: 8px;">
+                <button onclick="loadGitStatus()" style="flex:1; padding: 8px;">Refresh</button>
+                <button id="toolbarWrapBtn" onclick="toggleDiffWrap()" style="flex:1; padding: 8px; background:#2f2f2f;">Wrap: on</button>
+            </div>
+            <div id="gitFileList"></div>
+            <div id="editorView" style="display:none">
+                <div style="display:flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <h3 id="editingFileName" style="color:#aaa; font-size: 13px; margin:0"></h3>
+                    <div style="display:flex; gap:8px">
+                        <button onclick="closeEditor()" style="background:#444; padding: 4px 12px; font-size: 12px;">Cancel</button>
+                        <button onclick="saveFile()" style="background:#059669; padding: 4px 12px; font-size: 12px;">Save Changes</button>
+                    </div>
+                </div>
+                <textarea id="rawEditor"></textarea>
+            </div>
+            <div id="gitContent"></div>
+            <div id="commitSection" style="display:none">
+                <textarea id="commitMsg" placeholder="Commit message..."></textarea>
+                <button onclick="commitChanges()" style="background:#3d702d; padding: 8px;">Commit Staged Changes</button>
+            </div>
+
+        </div>
+        <div id="explorerView">
+            <div id="explorerTreeContainer">
+                <div class="explorer-path-bar">
+                    
+                    <button onclick="loadExplorerTree()" style="flex:1; padding: 8px;">Refresh</button>
+                </div>
+                <div class="explorer-tree" id="explorerTree">
+                    <div class="explorer-empty">Click Refresh to load files</div>
+                </div>
+            </div>
+            <div id="explorerEditorView" style="display:none">
+                <div class="explorer-editor-bar">
+                    <h3><span class="file-badge">Editing</span> <span id="explorerFileName"></span></h3>
+                    <div class="explorer-editor-btns">
+                        <button class="btn-cancel" onclick="closeExplorerEditor()">Cancel</button>
+                        <button class="btn-save" onclick="saveExplorerFile()">Save</button>
+                    </div>
+                </div>
+                <textarea id="explorerEditor"></textarea>
+            </div>
+        </div>
+        
+        <div id="gitHistoryView" style="display:none; height:100%; padding: 0;">
+             <div class="explorer-path-bar" style="justify-content: space-between;">
+                <div style="display:flex; gap:8px; align-items:center;">
+                    <span style="font-weight:bold; color:#ccc;">SOURCE CONTROL GRAPH</span>
+                    <span id="currentBranchBadge" class="file-badge" style="background:#555">...</span>
+                </div>
+                <div style="display:flex; gap:8px">
+                    <button onclick="loadGitHistory()">Refresh</button>
+                    <button onclick="syncChanges()" style="background:#059669">Sync</button>
+                    <button onclick="pushChanges()" style="background:#2563eb">Push</button>
+                </div>
+            </div>
+            <div id="gitGraphContainer" style="height: calc(100% - 50px); overflow-y: auto; padding: 10px;">
+                <div class="loading">Loading git history...</div>
+            </div>
+        </div>
     </div>
 
     <div class="input-section">
@@ -151,6 +624,18 @@
         let cascades = [];
         let currentCascadeId = null;
         let ws = null;
+
+        function showToast(msg, duration = 4000) {
+            const existing = document.querySelector('.toast');
+            if (existing) existing.remove();
+
+            const toast = document.createElement('div');
+            toast.className = 'toast';
+            toast.innerHTML = msg + '<button class="close" onclick="this.parentElement.remove()">×</button>';
+            document.body.appendChild(toast);
+
+            setTimeout(() => toast.remove(), duration);
+        }
 
         function connect() {
             ws = new WebSocket(`ws://${location.host}`);
@@ -179,23 +664,528 @@
         }
 
         function renderTabs() {
-            tabsContainer.innerHTML = cascades.map(c => `
+            const cascadeTabs = cascades.map(c => `
                 <div class="cascade-tab ${c.id === currentCascadeId ? 'active' : ''} ${c.active ? 'active-window' : ''}" 
                      onclick="selectCascade('${c.id}')">
-                    <div class="status"></div>
                     ${c.title || 'Untitled'}
                 </div>
             `).join('');
 
-            if (cascades.length === 0) {
-                tabsContainer.innerHTML = '<div class="cascade-tab">No chats found</div>';
+            const explorerTab = `
+                <div class="cascade-tab ${currentCascadeId === 'EXPLORER_VIEW' ? 'active' : ''}" 
+                     onclick="selectExplorerTab()">
+                    Explorer
+                </div>
+            `;
+
+            const changesTab = `
+                <div class="cascade-tab ${currentCascadeId === 'DIFF_VIEW' ? 'active' : ''}" 
+                     onclick="selectDiffTab()">
+                    Changes
+                </div>
+            `;
+
+            const gitTab = `
+                <div class="cascade-tab ${currentCascadeId === 'GIT_HISTORY_VIEW' ? 'active' : ''}" 
+                     onclick="selectGitTab()">
+                    Git
+                </div>
+            `;
+
+            tabsContainer.innerHTML = cascadeTabs + explorerTab + changesTab + gitTab;
+
+            if (cascades.length === 0 && currentCascadeId !== 'DIFF_VIEW' && currentCascadeId !== 'EXPLORER_VIEW' && currentCascadeId !== 'GIT_HISTORY_VIEW') {
+                tabsContainer.innerHTML = '<div class="cascade-tab">No chats found</div>' + explorerTab + changesTab + gitTab;
             }
         }
 
         function selectCascade(id) {
             currentCascadeId = id;
+            document.getElementById('chatContent').style.display = 'block';
+            document.getElementById('diffView').style.display = 'none';
+            document.getElementById('explorerView').style.display = 'none';
+            document.getElementById('gitHistoryView').style.display = 'none';
+            document.querySelector('.input-section').style.display = 'flex';
             renderTabs();
             loadCascade(id);
+        }
+
+        function selectExplorerTab() {
+            currentCascadeId = 'EXPLORER_VIEW';
+            document.getElementById('chatContent').style.display = 'none';
+            document.getElementById('diffView').style.display = 'none';
+            document.getElementById('explorerView').style.display = 'block';
+            document.getElementById('gitHistoryView').style.display = 'none';
+            document.querySelector('.input-section').style.display = 'none';
+            renderTabs();
+            loadExplorerTree();
+        }
+
+        function selectDiffTab(skipLoad = false) {
+            // Toggle wrapping if already active and clicked manually (skipLoad is false)
+            if (!skipLoad && currentCascadeId === 'DIFF_VIEW') {
+                const content = document.getElementById('gitContent');
+                if (content) {
+                    content.classList.toggle('diff-no-wrap');
+                    const isNoWrap = content.classList.contains('diff-no-wrap');
+                    showToast(isNoWrap ? "Wrapping: OFF" : "Wrapping: ON", 1500);
+                }
+                return;
+            }
+
+            currentCascadeId = 'DIFF_VIEW';
+            document.getElementById('chatContent').style.display = 'none';
+            document.getElementById('diffView').style.display = 'block';
+            document.getElementById('explorerView').style.display = 'none';
+            document.getElementById('gitHistoryView').style.display = 'none';
+            document.querySelector('.input-section').style.display = 'none';
+            
+            // Default to Wrapping ON
+            const content = document.getElementById('gitContent');
+            if (content) content.classList.remove('diff-no-wrap');
+
+            renderTabs();
+            if (!skipLoad) {
+                // Only load status if we are not intending to show a specific commit context immediately
+                loadGitStatus();
+            }
+        }
+
+        function selectGitTab() {
+            currentCascadeId = 'GIT_HISTORY_VIEW';
+            document.getElementById('chatContent').style.display = 'none';
+            document.getElementById('diffView').style.display = 'none';
+            document.getElementById('explorerView').style.display = 'none';
+            document.getElementById('gitHistoryView').style.display = 'block';
+            document.querySelector('.input-section').style.display = 'none';
+            renderTabs();
+            loadGitHistory();
+        }
+
+        async function loadGitHistory() {
+             const container = document.getElementById('gitGraphContainer');
+             container.innerHTML = '<div class="loading">Loading commits...</div>';
+             
+             try {
+                // Load branches first for badge
+                const branchRes = await fetch('/git/branches');
+                const branchData = await branchRes.json();
+                if (branchData.branches) {
+                    const active = branchData.branches.find(b => b.active);
+                    if (active) document.getElementById('currentBranchBadge').textContent = active.name;
+                }
+
+                // Load logs
+                const logRes = await fetch('/git/log');
+                const logData = await logRes.json();
+                
+                if (logData.error) {
+                    container.innerHTML = `<div style="color:#ef4444">${logData.error}</div>`;
+                    return;
+                }
+
+                container.innerHTML = logData.commits.map(c => {
+                    const msg = c.message.replace(/'/g, "\\'");
+                    return `
+                    <div class="commit-row" style="border-bottom: 1px solid #333; padding: 12px 10px; margin-bottom: 5px;">
+                        <div style="display:flex; cursor:pointer;" onclick="toggleCommitDetails('${c.hash}', '${msg}')">
+                            <span style="color:#3b82f6; font-family:monospace; margin-right: 10px; width: 60px;">${c.hash}</span>
+                            <span style="flex:1; font-weight:bold; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${c.message}</span>
+                            <span style="color:#888; font-size:12px; margin-left:10px;">${c.author}</span>
+                            <span style="color:#666; font-size:12px; margin-left:10px; width:80px; text-align:right;">${c.date}</span>
+                        </div>
+                        ${c.refs ? `<div style="margin-top:4px;"><span class="file-badge" style="background:#e5a00d; color:black;">${c.refs}</span></div>` : ''}
+                        <div id="commit-details-${c.hash}" style="display:none; margin-top:8px; padding-left: 20px; border-left: 2px solid #333;">
+                            <div class="loading" style="margin:0; font-size:12px;">Loading files...</div>
+                        </div>
+                    </div>
+                `}).join('');
+
+             } catch (e) {
+                 container.innerHTML = `<div style="color:#ef4444">Failed: ${e.message}</div>`;
+             }
+        }
+
+        async function toggleCommitDetails(hash, message) {
+            const el = document.getElementById(`commit-details-${hash}`);
+            if (el.style.display === 'block') {
+                el.style.display = 'none';
+            } else {
+                el.style.display = 'block';
+                if (!el.dataset.loaded) {
+                    const res = await fetch(`/git/commit-files?hash=${hash}`);
+                    const data = await res.json();
+                    if (data.files) {
+                        // Pass message (escaped)
+                        const msgEscaped = message.replace(/'/g, "\\'");
+                        el.innerHTML = data.files.map(f => `
+                            <div style="display:flex; font-size:12px; padding:6px 0; cursor:pointer; color:#ccc; align-items:center;" onclick="showCommitDiff('${hash}', '${f.file}', '${msgEscaped}')">
+                                <span style="display:inline-block; width:24px; font-weight:bold; color:${f.status === 'M' ? '#fbbf24' : f.status === 'A' ? '#4ade80' : '#f87171'}">${f.status}</span>
+                                <span style="flex:1;">${f.file}</span>
+                            </div>
+                        `).join('');
+                        el.dataset.loaded = 'true';
+                    }
+                }
+            }
+        }
+
+        async function showCommitDiff(hash, file, message) {
+            // Re-use Git Diff view but for commit
+            selectDiffTab(true); // Switch to Changes tab but SKIP loading status
+            
+            const contentEl = document.getElementById('gitContent');
+            const listEl = document.getElementById('gitFileList');
+            
+            // If we are already viewing this commit's context, don't reload the list
+            // We store the current commit hash in a data attribute to check
+            if (listEl.dataset.commitHash !== hash) {
+                listEl.dataset.commitHash = hash;
+                listEl.innerHTML = '<div class="loading">Loading commit files...</div>';
+
+                // Fetch files for this commit to populate the sidebar
+                try {
+                    const resFiles = await fetch(`/git/commit-files?hash=${hash}`);
+                    const dataFiles = await resFiles.json();
+                    
+                    if (dataFiles.files) {
+                        const filesListHtml = dataFiles.files.map(f => `
+                            <div class="file-list-item ${f.file === file ? 'selected' : ''}" onclick="showCommitDiff('${hash}', '${f.file}', '${message.replace(/'/g, "\\'")}')">
+                                <span style="display:inline-block; width:20px; font-weight:bold; color:${f.status === 'M' ? '#fbbf24' : f.status === 'A' ? '#4ade80' : '#f87171'}">${f.status}</span>
+                                <span style="flex:1; overflow:hidden; text-overflow:ellipsis;">${f.file}</span>
+                            </div>
+                        `).join('');
+
+                        listEl.innerHTML = `
+                            <div style="padding:10px; color:#60a5fa; cursor:pointer; border-bottom:1px solid #333; margin-bottom:10px; font-weight:bold;" onclick="delete document.getElementById('gitFileList').dataset.commitHash; loadGitStatus()">
+                                ← Back to Working Changes
+                            </div>
+                            <div style="padding:10px; background:#222; border-radius:6px; border-left:4px solid #3b82f6; margin-bottom:10px;">
+                                <div style="font-family:monospace; color:#3b82f6; font-size:12px; margin-bottom:4px;">${hash.substring(0,7)}</div>
+                                <div style="font-weight:bold; color:#fff; font-size:12px; line-height:1.4; max-height:40px; overflow:hidden;">${message}</div>
+                            </div>
+                            <div style="overflow-y:auto; flex:1;">
+                                ${filesListHtml}
+                            </div>
+                        `;
+                    }
+                } catch(e) {
+                    listEl.innerHTML = `<div style="color:#ef4444">Failed to load file list: ${e.message}</div>`;
+                }
+            } else {
+                // Just update selection highlight
+                Array.from(listEl.querySelectorAll('.file-list-item')).forEach(el => el.classList.remove('selected'));
+                // Simple text match might be enough or add data-file attr
+                // For MVP just re-render is safer but let's try to be smart?
+                // Actually re-rendering the list is fast enough for <100 files. 
+                // But let's stick to the "don't reload if same hash" logic and just update styles if possible.
+                // For simplicity of this function, I'll just re-highlight based on text content if I can, 
+                // OR just let the user click. 
+                // Let's at least update the "selected" class manually
+                const items = listEl.querySelectorAll('.file-list-item');
+                items.forEach(item => {
+                    if (item.textContent.includes(file)) item.classList.add('selected'); // loose match
+                });
+            }
+
+            contentEl.innerHTML = '<div class="loading">Loading diff...</div>';
+            
+            try {
+                const res = await fetch(`/git/diff-commit?hash=${hash}&file=${encodeURIComponent(file)}`);
+                const data = await res.json();
+                if (data.diff) {
+                    const html = data.diff.split('\n').map(l => {
+                        let cls = 'diff-line';
+                        if (l.startsWith('+')) cls += ' diff-added';
+                        if (l.startsWith('-')) cls += ' diff-removed';
+                        if (l.startsWith('diff')) cls += ' diff-header';
+                        return `<div class="${cls}">${l.replace(/</g, '&lt;')}</div>`;
+                    }).join('');
+                    
+                    contentEl.innerHTML = `
+                        <div style="background:#e5a00d; color:black; padding:8px 16px; font-weight:bold; margin-bottom:16px; border-radius:6px; display:flex; align-items:center; gap:8px;">
+                            <span style="font-size:18px">⚠️</span>
+                            <span>READ ONLY: Viewing historical commit ${hash.substring(0,7)}</span>
+                        </div>
+                        <div style="margin-bottom:10px; font-family:monospace; color:#ccc;">${file}</div>
+                    ` + html;
+                }
+            } catch(e) {
+                contentEl.innerHTML = `<div style="color:#ef4444">${e.message}</div>`;
+            }
+        }
+
+        async function pushChanges() {
+            showToast('Pushing...');
+            try {
+                const res = await fetch('/git/push', { method: 'POST' });
+                const data = await res.json();
+                if (data.ok) showToast('<span style="color:#4ade80">✓ Push Successful</span>');
+                else showToast('Push failed: ' + data.error);
+                loadGitHistory();
+            } catch(e) { showToast('Push error: ' + e.message); }
+        }
+
+        async function syncChanges() {
+             showToast('Syncing (Pull --rebase + Push)...');
+            try {
+                const res = await fetch('/git/sync', { method: 'POST' });
+                const data = await res.json();
+                if (data.ok) showToast('<span style="color:#4ade80">✓ Sync Successful</span>');
+                else showToast('Sync failed: ' + data.error);
+                loadGitHistory();
+            } catch(e) { showToast('Sync error: ' + e.message); }
+        }
+
+        async function loadGitStatus() {
+            const listEl = document.getElementById('gitFileList');
+            const contentEl = document.getElementById('gitContent');
+            const path = ''; // Default to root
+            
+            listEl.innerHTML = '<div class="loading">Checking git...</div>';
+            contentEl.innerHTML = '';
+            contentEl.dataset.currentFile = ''; // Reset current file on status reload
+
+            try {
+                const res = await fetch(`/git/status?path=${encodeURIComponent(path)}`);
+                const data = await res.json();
+                
+                if (data.error) {
+                    listEl.innerHTML = `<div style="color:#ef4444">${data.error}</div>`;
+                    return;
+                }
+
+                if (!data.status || data.status === 'No changes') {
+                    listEl.innerHTML = '<div style="color:#9ca3af; padding: 20px; text-align:center;">No changes detected.</div>';
+                    // Load full diff anyway just in case
+                    loadGitDiff('', path);
+                    return;
+                }
+
+                let hasStaged = false;
+                const lines = data.status.split('\n').filter(l => l.length > 3);
+                listEl.innerHTML = lines.map(line => {
+                    let status = line.slice(0, 2).trim();
+                    const file = line.substring(3).trim();
+                    
+                    const isStaged = line.startsWith('M ') || line.startsWith('A ') || line.startsWith('D ');
+                    const isUntracked = line.startsWith('??');
+                    
+                    if (isStaged) hasStaged = true;
+
+                    return `
+                        <div class="file-list-item" onclick="loadGitDiff('${file}', '${path}')">
+                            <span class="file-status status-${status || 'untracked'}">${status || '??'}</span>
+                            ${isStaged ? '<span class="status-staged">Staged</span>' : ''}
+                            <span style="flex:1">${file}</span>
+                            <div class="file-actions">
+                                <button class="action-btn" onclick="openEditor(event, '${file}', '${path}')">Edit</button>
+                                ${isStaged ? 
+                                    `<button class="action-btn unstage" onclick="unstageFile(event, '${file}', '${path}')">Unstage</button>` :
+                                    `<button class="action-btn stage" onclick="stageFile(event, '${file}', '${path}')">Stage</button>`
+                                }
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+
+                const commitSection = document.getElementById('commitSection');
+                commitSection.style.display = hasStaged ? 'flex' : 'none';
+
+                listEl.innerHTML += `
+                    <div class="file-list-item" onclick="loadGitDiff('', '${path}')" style="font-weight:bold; border-top: 1px solid #444; margin-top: 4px; padding-top: 12px; color: #60a5fa;">
+                        <span class="file-status">Σ</span>
+                        <span>Show All Changes</span>
+                    </div>
+                `;
+            } catch (e) {
+                listEl.innerHTML = `<div style="color:#ef4444">Failed: ${e.message}</div>`;
+            }
+        }
+
+        function toggleDiffWrap() {
+            const content = document.getElementById('gitContent');
+            const btn = document.getElementById('toolbarWrapBtn');
+            const isWrapped = !content.classList.contains('diff-no-wrap');
+            
+            if (isWrapped) {
+                content.classList.add('diff-no-wrap');
+                btn.innerText = 'Wrap: off';
+                btn.style.background = '#1d1d1d';
+            } else {
+                content.classList.remove('diff-no-wrap');
+                btn.innerText = 'Wrap: on';
+                btn.style.background = '#2f2f2f';
+            }
+        }
+
+        async function loadGitDiff(file, path) {
+            const contentEl = document.getElementById('gitContent');
+            
+            // Check if we are toggling closure
+            if (contentEl.dataset.currentFile === file && contentEl.style.display !== 'none') {
+                 contentEl.style.display = 'none';
+                 contentEl.dataset.currentFile = '';
+                 // Optional: clear selection styling
+                 const listEl = document.getElementById('gitFileList');
+                 Array.from(listEl.querySelectorAll('.file-list-item')).forEach(el => el.classList.remove('selected'));
+                 return;
+            }
+            
+            contentEl.style.display = 'block';
+            contentEl.dataset.currentFile = file;
+
+            contentEl.innerHTML = '<div class="loading">Loading diff...</div>';
+
+            try {
+                const url = `/git/diff?path=${encodeURIComponent(path)}&file=${encodeURIComponent(file)}`;
+                const res = await fetch(url);
+                const data = await res.json();
+
+                if (data.error) {
+                    contentEl.innerHTML = `<div style="color:#ef4444">${data.error}</div>`;
+                    return;
+                }
+
+                if (file === '' && data.diff && data.diff.includes('diff --git')) {
+                    // Split All Changes by file
+                    const files = data.diff.split(/^diff --git /m).filter(f => f.trim());
+                    contentEl.innerHTML = files.map(f => {
+                         const headerLine = f.split('\n')[0];
+                         const fileNameMatch = headerLine.match(/b\/(.*)$/);
+                         const fileName = fileNameMatch ? fileNameMatch[1] : 'File';
+                         
+                         return `
+                            <div style="margin-bottom: 40px; border-bottom: 1px solid #333; padding-bottom: 20px;">
+                                <h1 style="color:#fff; font-size: 1.25rem; margin-bottom: 15px; background:#222; padding: 10px; border-radius: 6px; border-left: 4px solid #3b82f6;">
+                                    ${fileName}
+                                </h1>
+                                <div style="background:#0a0a0a; border-radius: 8px; padding: 4px; overflow-x: auto;">
+                                    ${renderDiffLines(f)}
+                                </div>
+                            </div>
+                         `;
+                    }).join('');
+                } else {
+                    contentEl.innerHTML = `
+                        <h1 style="color:#fff; font-size: 1.1rem; margin-bottom: 15px; background:#222; padding: 10px; border-radius: 6px; border-left: 4px solid #fbbf24;">
+                            ${file || 'All Changes'}
+                        </h1>
+                        <div style="background:#0a0a0a; border-radius: 8px; padding: 4px; overflow-x: auto;">
+                            ${renderDiffLines(data.diff)}
+                        </div>
+                    `;
+                }
+            } catch (e) {
+                contentEl.innerHTML = `<div style="color:#ef4444">Failed: ${e.message}</div>`;
+            }
+        }
+
+        function renderDiffLines(diffText) {
+            if (!diffText || diffText === 'No diff available') return '<div class="diff-meta">No changes to show.</div>';
+            
+            const lines = diffText.split('\n');
+            return lines.map(line => {
+                let className = 'diff-line';
+                if (line.startsWith('+') && !line.startsWith('+++')) className += ' diff-added';
+                else if (line.startsWith('-') && !line.startsWith('---')) className += ' diff-removed';
+                else if (line.startsWith('@@')) className += ' diff-header';
+                else if (line.startsWith('diff') || line.startsWith('index') || line.startsWith('---') || line.startsWith('+++')) className += ' diff-meta';
+                
+                return `<div class="${className}">${escapeHtml(line) || ' '}</div>`;
+            }).join('');
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+
+
+        async function stageFile(e, file, path) {
+            e.stopPropagation();
+            try {
+                await fetch('/git/stage', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ file, path })
+                });
+                loadGitStatus();
+            } catch (err) { alert(err.message); }
+        }
+
+        async function unstageFile(e, file, path) {
+            e.stopPropagation();
+            try {
+                await fetch('/git/unstage', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ file, path })
+                });
+                loadGitStatus();
+            } catch (err) { alert(err.message); }
+        }
+
+        let editingFile = { name: '', path: '' };
+
+        async function openEditor(e, file, path) {
+            e.stopPropagation();
+            editingFile = { name: file, path: path };
+            document.getElementById('gitContent').style.display = 'none';
+            document.getElementById('editorView').style.display = 'block';
+            document.getElementById('editingFileName').innerText = `Editing: ${file}`;
+            
+            try {
+                const res = await fetch(`/git/read?file=${encodeURIComponent(file)}&path=${encodeURIComponent(path)}`);
+                const data = await res.json();
+                document.getElementById('rawEditor').value = data.content;
+            } catch (err) { alert(err.message); }
+        }
+
+        function closeEditor() {
+            document.getElementById('gitContent').style.display = 'block';
+            document.getElementById('editorView').style.display = 'none';
+        }
+
+        async function saveFile() {
+            const content = document.getElementById('rawEditor').value;
+            try {
+                await fetch('/git/save', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        file: editingFile.name, 
+                        path: editingFile.path, 
+                        content 
+                    })
+                });
+                closeEditor();
+                loadGitDiff(editingFile.name, editingFile.path);
+            } catch (err) { alert(err.message); }
+        }
+
+        async function commitChanges() {
+            const msg = document.getElementById('commitMsg').value;
+            const path = ''; // Default to root
+            if (!msg) return alert("Please enter a commit message");
+            
+            try {
+                const res = await fetch('/git/commit', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ path, message: msg })
+                });
+                const data = await res.json();
+                if (data.ok) {
+                    document.getElementById('commitMsg').value = '';
+                    loadGitStatus();
+                    document.getElementById('gitContent').innerHTML = '<div style="color:#4ade80">Commit successful!</div>';
+                } else {
+                    alert(data.error);
+                }
+            } catch (err) { alert(err.message); }
         }
 
         async function loadCascade(id) {
@@ -206,14 +1196,64 @@
                     const styleData = await styleRes.json();
                     document.getElementById('cascade-style').textContent = `
                         ${styleData.css}
+                        /* Custom Overrides to clean up mirror */
                         #cascade { 
                             background: transparent !important; 
                             color: white !important; 
+                            padding: 0 !important;
+                            margin: 0 !important;
                         }
+                        #cascade .monaco-list-spacer, 
+                        #cascade .monaco-placeholder,
+                        #cascade .monaco-scrollable-element > .scrollbar,
+                        #cascade .scrollbar { 
+                            display: none !important; 
+                            height: 0 !important; 
+                            width: 0 !important; 
+                        }
+                        
+                        /* Fix for the huge bottom space and virtualization spacers */
+                        #cascade [class*="monaco-scrollable-element"],
+                        #cascade [class*="monaco-list-rows"],
+                        #cascade [class*="rows-container"],
+                        #cascade .monaco-list-rows,
+                        #cascade .rows-container {
+                            height: auto !important;
+                            min-height: 0 !important;
+                            max-height: none !important;
+                            padding: 0 !important;
+                            margin: 0 !important;
+                            transform: none !important;
+                            top: 0 !important;
+                            position: relative !important;
+                            overflow: visible !important;
+                        }
+                        
+                        /* Ensure individual messages don't have absolute positioning offsets */
+                        #cascade [class*="message"], #cascade [class*="monaco-list-row"] {
+                            position: relative !important;
+                            top: 0 !important;
+                            transform: none !important;
+                            margin-bottom: 10px !important;
+                        }
+                        
+                        /* Specific fix for the 20px height div - Second div of #conversation */
+                        #cascade #conversation > div:nth-child(2),
+                        #conversation > div:nth-child(2) {
+                            height: 60px !important;
+                            opacity: 0.5 !important;
+                            margin-top: 2em;
+                        }
+                        
+                        /* Hide input/footer areas that might leak */
+                        #cascade [class*="input"], #cascade [class*="footer"], #cascade [class*="composer"] {
+                            display: none !important;
+                        }
+                        
                         #cascade .prose {
-                            --tw-prose-body: #e5e7eb !important;
+                            --tw-prose-body: #c3d9c4 !important;
                             --tw-prose-headings: #f3f4f6 !important;
-                            --tw-prose-lead: #e5e7eb !important;
+                            --tw-prose-lead: #c3d9c4 !important;
                             --tw-prose-links: #60a5fa !important;
                             --tw-prose-bold: #f3f4f6 !important;
                             --tw-prose-counters: #9ca3af !important;
@@ -227,7 +1267,10 @@
                             --tw-prose-pre-bg: #1f2937 !important;
                             --tw-prose-th-borders: #374151 !important;
                             --tw-prose-td-borders: #374151 !important;
-                            color: #e5e7eb !important; /* Force color explicitly too */
+                            color: #c3d9c4 !important; /* Force color explicitly too */
+                        }
+                        #cascade .prose, #cascade .prose *, #cascade [class*="message"] *, #cascade p, #cascade span {
+                            color: #c3d9c4 !important;
                         }
                         /* Ensure code blocks are readable */
                         pre, code { background: #111 !important; color: #ddd !important; }
@@ -236,7 +1279,9 @@
 
                 // 2. Fetch Content
                 await updateContentOnly(id);
-            } catch (e) { console.error(e); }
+            } catch (e) {
+                console.error(e);
+            }
         }
 
         async function updateContentOnly(id) {
@@ -246,14 +1291,15 @@
                 const data = await res.json();
 
                 // Preserve Scroll
-                const isAtBottom = chatContainer.scrollHeight - chatContainer.scrollTop - chatContainer.clientHeight < 50;
+                const isAtBottom = chatContainer.scrollHeight - chatContainer.scrollTop - chatContainer
+                    .clientHeight < 50;
 
                 document.body.style.backgroundColor = data.bodyBg || '#1a1a1a';
                 chatContent.innerHTML = data.html;
                 // No inner style block needed anymore
 
                 if (isAtBottom) chatContainer.scrollTop = chatContainer.scrollHeight;
-            } catch (e) { }
+            } catch (e) {}
         }
 
         async function sendMessage() {
@@ -267,8 +1313,12 @@
             try {
                 await fetch(`/send/${currentCascadeId}`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message: text })
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        message: text
+                    })
                 });
                 updateContentOnly(currentCascadeId); // Immediate refresh try
             } catch (e) {
@@ -286,6 +1336,198 @@
                 sendMessage();
             }
         });
+
+        // Relay button clicks back to Antigravity
+        chatContent.addEventListener('click', async (e) => {
+            const btn = e.target.closest('button');
+            if (!btn || !currentCascadeId) return;
+
+            const relayId = btn.getAttribute('data-relay-id');
+            if (!relayId) return; // Not a relayable button
+
+            e.preventDefault();
+            e.stopPropagation();
+
+            console.log('Relaying click:', relayId);
+
+            try {
+                const res = await fetch(`/click/${currentCascadeId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        relayId
+                    })
+                });
+
+                if (!res.ok) {
+                    const err = await res.json();
+                    console.error('Click failed:', err);
+                    showToast(err.error || err.reason || 'Click failed');
+                }
+
+                // Refresh after click
+                setTimeout(() => updateContentOnly(currentCascadeId), 300);
+            } catch (err) {
+                console.error('Click relay error:', err);
+                showToast('Network error: ' + err.message);
+            }
+        });
+
+        // === Explorer Tab Logic ===
+
+        function selectExplorerTab() {
+            currentCascadeId = 'EXPLORER_VIEW';
+            document.getElementById('chatContent').style.display = 'none';
+            document.getElementById('diffView').style.display = 'none';
+            document.getElementById('explorerView').style.display = 'block';
+            document.querySelector('.input-section').style.display = 'none';
+            renderTabs();
+            loadExplorerTree();
+        }
+
+        let explorerEditingFile = { name: '', path: '' };
+
+        async function loadExplorerTree() {
+            const treeEl = document.getElementById('explorerTree');
+            const path = ''; // Default to root
+            treeEl.innerHTML = '<div class="explorer-empty">Loading...</div>';
+
+            try {
+                const res = await fetch(`/explorer/tree?path=${encodeURIComponent(path)}`);
+                const data = await res.json();
+
+                if (data.error) {
+                    treeEl.innerHTML = `<div style="color:#ef4444; padding:16px">${data.error}</div>`;
+                    return;
+                }
+
+                if (!data.tree || data.tree.length === 0) {
+                    treeEl.innerHTML = '<div class="explorer-empty">Empty directory</div>';
+                    return;
+                }
+
+                treeEl.innerHTML = renderTree(data.tree, 0, path);
+            } catch (e) {
+                treeEl.innerHTML = `<div style="color:#ef4444; padding:16px">Failed: ${e.message}</div>`;
+            }
+        }
+
+        function getFileIcon(name) {
+            const ext = name.split('.').pop().toLowerCase();
+            const icons = {
+                js: '📜', mjs: '📜', cjs: '📜',
+                ts: '🔷', tsx: '🔷',
+                html: '🌐', htm: '🌐',
+                css: '🎨', scss: '🎨', less: '🎨',
+                json: '📋', yaml: '📋', yml: '📋', toml: '📋',
+                md: '📝', txt: '📄',
+                php: '🐘',
+                py: '🐍',
+                rb: '💎',
+                sh: '⚙️', bash: '⚙️', zsh: '⚙️',
+                png: '🖼️', jpg: '🖼️', jpeg: '🖼️', gif: '🖼️', svg: '🖼️', webp: '🖼️',
+                env: '🔒',
+                gitignore: '🚫',
+                lock: '🔒',
+            };
+            return icons[ext] || '📄';
+        }
+
+        function renderTree(items, depth, projectPath) {
+            return items.map(item => {
+                const indent = depth * 16;
+                if (item.type === 'dir') {
+                    const id = 'folder-' + item.path.replace(/[^a-zA-Z0-9]/g, '-');
+                    return `
+                        <div>
+                            <div class="tree-item" style="padding-left:${8 + indent}px" onclick="toggleFolder('${id}')">
+                                <span class="tree-chevron open" id="chev-${id}">
+                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                                        <polyline points="9 18 15 12 9 6"></polyline>
+                                    </svg>
+                                </span>
+                                <span class="tree-icon">📁</span>
+                                <span class="tree-name">${item.name}</span>
+                            </div>
+                            <div class="tree-children open" id="${id}">
+                                ${renderTree(item.children || [], depth + 1, projectPath)}
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    return `
+                        <div class="tree-item" style="padding-left:${8 + indent + 16}px" onclick="openExplorerFile('${item.path}', '${projectPath}')">
+                            <span class="tree-chevron spacer"></span>
+                            <span class="tree-icon">${getFileIcon(item.name)}</span>
+                            <span class="tree-name">${item.name}</span>
+                        </div>
+                    `;
+                }
+            }).join('');
+        }
+
+        function toggleFolder(id) {
+            const children = document.getElementById(id);
+            const chevron = document.getElementById('chev-' + id);
+            if (children.classList.contains('open')) {
+                children.classList.remove('open');
+                chevron.classList.remove('open');
+            } else {
+                children.classList.add('open');
+                chevron.classList.add('open');
+            }
+        }
+
+        async function openExplorerFile(filePath, projectPath) {
+            explorerEditingFile = { name: filePath, path: projectPath };
+            document.getElementById('explorerTreeContainer').style.display = 'none';
+            document.getElementById('explorerEditorView').style.display = 'block';
+            document.getElementById('explorerFileName').textContent = filePath;
+            document.getElementById('explorerEditor').value = 'Loading...';
+
+            try {
+                const res = await fetch(`/git/read?file=${encodeURIComponent(filePath)}&path=${encodeURIComponent(projectPath)}`);
+                const data = await res.json();
+                if (data.error) {
+                    document.getElementById('explorerEditor').value = 'Error: ' + data.error;
+                    return;
+                }
+                document.getElementById('explorerEditor').value = data.content;
+            } catch (err) {
+                document.getElementById('explorerEditor').value = 'Failed to load: ' + err.message;
+            }
+        }
+
+        function closeExplorerEditor() {
+            document.getElementById('explorerEditorView').style.display = 'none';
+            document.getElementById('explorerTreeContainer').style.display = 'block';
+        }
+
+        async function saveExplorerFile() {
+            const content = document.getElementById('explorerEditor').value;
+            try {
+                const res = await fetch('/git/save', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        file: explorerEditingFile.name,
+                        path: explorerEditingFile.path,
+                        content
+                    })
+                });
+                const data = await res.json();
+                if (data.ok) {
+                    showToast('<span style="color:#4ade80">✓ Saved successfully</span>', 2000);
+                    closeExplorerEditor();
+                } else {
+                    showToast('Save failed: ' + (data.error || 'Unknown error'));
+                }
+            } catch (err) {
+                showToast('Save failed: ' + err.message);
+            }
+        }
 
         connect();
     </script>

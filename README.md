@@ -1,76 +1,63 @@
-# Antigravity Shit-Chat Mobile Monitor
+# 🚀 Antigravity Web Remote
 
-Need to go to the bathroom? But Opus 4.5 might be done with that big task soon? Want to eat lunch? But there's more tokens left before they reset right after lunch?
+<div align="center">
+  <img width="800" alt="screenshot" src="https://github.com/user-attachments/assets/95318065-d943-43f1-b05c-26fd7c0733dd" />
+  
+  <br>
+  
+  **A real-time interface for monitoring and interacting with Antigravity chat sessions remotely.**
+</div>
 
-<img width="1957" height="1060" alt="screenshot" src="https://github.com/user-attachments/assets/95318065-d943-43f1-b05c-26fd7c0733dd" />
+---
 
+## ✨ Features
 
-A real-time mobile interface for monitoring and interacting with Antigravity chat sessions. 
+This fork extends the original project from [lukasz-wronski antigravity-shit-chat](https://github.com/lukasz-wronski/antigravity-shit-chat):
 
-## How It Works
+- 🌳 **File Explorer**: Browse your project files directly from the web interface
+- ✏️ **Code Editor**: Edit files
+- 🔄 **Git**: 
+  - View **Git Status** and **Diffs**
+  - **Stage/Unstage** files
+  - **Commit** changes
+  - **Sync** (Pull/Push) with remote repositories
+- ✨ **UI**: typography and mobile optimizations.
+- 🖱️ **Clicking**: Click buttons in the chat interface remotely (via [sanderd fork](https://github.com/sanderd/Antigravity-Shit-Chat/tree/feature/remote-button-click)
 
-It's a simple system, but pretty hacky.
+---
 
-The mobile monitor operates through three main components:
+## 🛠️ Installation & Usage
 
-### 1. Reading (Snapshot Capture)
-The server connects to Antigravity via Chrome DevTools Protocol (CDP) and periodically captures **snapshots of the chat interface**:
-- Captures all CSS styles to preserve formatting, sends CSS only once bc its huge
-- Captures the HTML of the chat interface
-- Buttons and everything that you wont be able to click
-- Polls every 3 seconds and only updates when content changes
-
-### 2. Injecting (Message Sending)
-Antigravity must be run in chrome with remote debugging enabled.
-Messages typed in the mobile interface are injected directly into Antigravity:
-- Locates the Antigravity chat input editor
-- Inserts the message text and triggers submission
-- Handles the input safely without interfering with ongoing operations
-
-### 3. Serving (Web Interface)
-A lightweight web server provides the mobile UI:
-- WebSocket connection for real-time updates
-- Auto-refresh when new content appears
-- Send messages directly from your phone
-
-## Setup
-
-### 1. Start Antigravity with CDP
-
-Start Antigravity with Chrome DevTools Protocol enabled:
-
-```bash
-antigravity . --remote-debugging-port=9000
-```
-(You will get this message: "Warning: 'remote-debugging-port' is not in the list of known options, but still passed to Electron/Chromium." that's fine)
-
-### 2. Install Dependencies
-
+### 1. Install Dependencies
+Run this command in the project folder to install the necessary packages:
 ```bash
 npm install
 ```
 
-### 3. Start the Monitor
+### 2. Start Antigravity in Debug Mode
+Launch Antigravity with the remote debugging port enabled:
+```bash
+antigravity * --remote-debugging-port=9000
+```
+*(Note: You might see a warning about the flag, you can safely ignore it and close the terminal.)*
 
+### 3. Start the Server
+Run the Node.js server to start the web interface:
 ```bash
 node server.js
 ```
 
-### 4. Access from Mobile
-
-Open your browser in the bathroom and navigate to:
+### 4. Access the Interface
+Open your browser and navigate to:
 ```
-http://<your-local-ip>:3000
+http://localhost:3000
 ```
+> **Tip:** Use **Tailscale** to access your dev machine securely from external networks.
 
-### Problems?
+---
 
-Problems setting up? Don't know how to do a step? Can't find an explanation? **Open Shit-Chat folder in antigravity and tell the agent what issues you are having**. It can read the code in one go.
+## 🔗 Credits & Acknowledgments
 
-------------
+This project is a heavily modified fork based on the excellent work by [lukasz-wronski](https://github.com/lukasz-wronski/antigravity-shit-chat) and [Mario4272](https://github.com/Mario4272).
 
-This is over local network, so it will not work if you are on a different network, unless you use a VPN or tailscale or something.
 
-I have tried keeping it simple and not adding any extra features, but if you want to add more features, feel free to do so, because of how simple it is it should be pretty easy. You might just want to use the server.js and just use the API it exposes to interact with open chatwindows with your own client.
-
-### Thanks to https://github.com/lukasz-wronski for finding bugs and https://github.com/Mario4272 for the original idea. 
