@@ -13,6 +13,47 @@
             box-sizing: border-box;
         }
 
+        .terminal-log {
+            flex: 1;
+            background: #000;
+            color: #ddd;
+            padding: 10px;
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 11px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+            line-height: 1.4;
+        }
+        .terminal-input-bar {
+            display: flex;
+            background: #1a1a1a;
+            border-top: 1px solid #333;
+            padding: 4px;
+            gap: 4px;
+        }
+        .terminal-input-bar input {
+            flex: 1;
+            background: #252525;
+            border: 1px solid #333;
+            color: #fff;
+            padding: 4px 10px;
+            font-family: inherit;
+            font-size: 12px;
+            border-radius: 4px;
+        }
+        .terminal-btn {
+            background: #333;
+            color: #ccc;
+            border: 1px solid #444;
+            padding: 2px 8px;
+            font-size: 10px;
+            cursor: pointer;
+            border-radius: 3px;
+        }
+        .terminal-btn:hover { background: #444; }
+        .terminal-btn.stop { color: #f87171; border-color: #450a0a; }
+
         body {
             font-family: 'Segoe UI', sans-serif !important;
             background: #1a1a1a !important;
@@ -27,16 +68,70 @@
             margin: 0 !important;
         }
 
-        /* Cascade Selector / Header */
+        .app-header {
+            display: flex;
+            align-items: center;
+            background: #2a2a2a;
+            border-bottom: 1px solid #3a3a3a;
+            justify-content: space-between;
+        }
+
         .headers-container {
             background: #2a2a2a !important;
-            border-bottom: 1px solid #3a3a3a !important;
+            border-bottom: 1px solid transparent !important;
             position: relative;
             z-index: 100;
             display: flex;
+            flex: 1;
             overflow-x: auto;
             white-space: nowrap;
             -webkit-overflow-scrolling: touch;
+        }
+        
+        .project-context {
+            padding: 0 16px;
+            font-size: 11px;
+            color: #888;
+            font-weight: 500;
+            border-left: 1px solid #3a3a3a;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            white-space: nowrap;
+            background: #252525;
+            border-bottom: 2px solid transparent;
+            transition: border-color 0.3s;
+        }
+        
+        .context-label {
+            color: #3b82f6;
+            margin-right: 4px;
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .context-name {
+            color: #ddd;
+            font-weight: 600;
+        }
+
+        #projectContextSelector {
+            background: transparent;
+            border: none;
+            color: #ddd;
+            font-family: inherit;
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+            outline: none;
+            padding: 0;
+            appearance: none;
+        }
+        
+        #projectContextSelector option {
+            background: #2a2a2a;
+            color: #fff;
         }
 
         .cascade-tab {
@@ -71,13 +166,16 @@
 
         .chat-container {
             flex: 1;
-            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
             position: relative;
         }
 
         .chat-content {
-            padding: 0; /* Let mirror handle padding or set minimal */
-            min-height: 100%;
+            padding: 0;
+            flex: 1;
+            overflow-y: auto;
         }
 
         /* Mirror Cleanup Fixes */
@@ -409,6 +507,18 @@
             visibility: hidden;
         }
 
+        .terminal-root-select {
+            background: #252525;
+            color: #ddd;
+            border: 1px solid #444;
+            font-size: 11px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            max-width: 300px;
+            outline: none;
+        }
+        .terminal-root-select:focus { border-color: #3b82f6; }
+
         .tree-icon {
             width: 18px;
             height: 18px;
@@ -532,6 +642,7 @@
             font-size: 14px;
         }
     </style>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" />
     <style id="cascade-style">
         /* Dynamic styles will be injected here */
     </style>
@@ -539,9 +650,17 @@
 
 <body>
 
-    <div class="headers-container" id="tabsContainer">
-        <!-- Tabs injected here -->
-        <div class="cascade-tab">Loading...</div>
+    <div class="app-header">
+        <div class="headers-container" id="tabsContainer">
+            <!-- Tabs injected here -->
+            <div class="cascade-tab">Loading...</div>
+        </div>
+        <div class="project-context" id="projectContext" onclick="document.getElementById('projectContextSelector').focus()">
+            <span class="context-label"></span>
+            <select id="projectContextSelector" onchange="manualContextChange(this.value)">
+                <option value="">None</option>
+            </select>
+        </div>
     </div>
 
     <div class="chat-container" id="chatContainer">
@@ -571,14 +690,10 @@
             </div>
 
         </div>
-        <div id="explorerView">
-            <div id="explorerTreeContainer">
-                <div class="explorer-path-bar">
-                    <div id="currentRootPath" style="font-size: 10px; color: #888; position: absolute; top: -18px; left: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 90%;">...</div>
-                    <button onclick="loadExplorerTree()" style="flex:1; padding: 8px;">Refresh</button>
-                </div>
+        <div id="explorerView" style="display:none; height:100%; flex-direction:column;">
+            <div id="explorerTreeContainer" style="flex:1; overflow-y:auto; padding-top: 10px;">
                 <div class="explorer-tree" id="explorerTree">
-                    <div class="explorer-empty">Click Refresh to load files</div>
+                    <div class="explorer-empty">Loading project...</div>
                 </div>
             </div>
             <div id="explorerEditorView" style="display:none">
@@ -587,9 +702,47 @@
                     <div class="explorer-editor-btns">
                         <button class="btn-cancel" onclick="closeExplorerEditor()">Cancel</button>
                         <button class="btn-save" onclick="saveExplorerFile()">Save</button>
+                        <button class="nav-item" onclick="selectExplorerTab()">Explorer</button>
+                        <button class="nav-item" onclick="selectTerminalTab()">Terminal</button>
                     </div>
                 </div>
                 <textarea id="explorerEditor"></textarea>
+            </div>
+        </div>
+
+        <div id="terminalView" style="display:none; flex:1; height: 100%; flex-direction:column; overflow:hidden; background: #000;">
+            <div style="padding: 6px 10px; background: #1a1a1a; color: #888; font-size: 11px; border-bottom: 1px solid #333; display: flex; justify-content: space-between; align-items: center;">
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <span style="color:#555; text-transform:uppercase; font-size:9px; letter-spacing:0.5px; font-weight:bold;">Dual Terminal Mode</span>
+                </div>
+                <span style="display:flex; gap:8px;">
+                    <button onclick="loadExplorerTree()" style="background:transparent; border:1px solid #444; color:#ccc; border-radius:4px; font-size:10px; padding:2px 6px; cursor:pointer;">Refresh Root</button>
+                    <button onclick="clearAllTerminals()" class="terminal-btn clear" style="padding:2px 6px; font-size:10px;">Clear All</button>
+                </span>
+            </div>
+            <div style="flex: 1; display: flex; flex-direction: column; overflow: hidden;">
+                <!-- Term 1 -->
+                <div style="flex: 1; display: flex; flex-direction: column; border-bottom: 1px solid #333; position: relative; overflow: hidden;">
+                    <div style="position: absolute; top: 5px; right: 15px; color: #444; font-size: 9px; pointer-events: none; z-index: 10;">TERM 1</div>
+                    <div id="terminalLog1" class="terminal-log"></div>
+                    <div class="terminal-input-bar">
+                        <input type="text" id="terminalInput1" placeholder="Type a command..." onkeydown="handleTerminalKey(event, '1')">
+                        <button class="terminal-btn" onclick="sendTerminalCommand('1')">Send</button>
+                        <button class="terminal-btn stop" onclick="stopTerminal('1')">Stop</button>
+                        <button class="terminal-btn" onclick="clearTerminal('1')">CLS</button>
+                    </div>
+                </div>
+                <!-- Term 2 -->
+                <div style="flex: 1; display: flex; flex-direction: column; position: relative; overflow: hidden;">
+                    <div style="position: absolute; top: 5px; right: 15px; color: #444; font-size: 9px; pointer-events: none; z-index: 10;">TERM 2</div>
+                    <div id="terminalLog2" class="terminal-log"></div>
+                    <div class="terminal-input-bar">
+                        <input type="text" id="terminalInput2" placeholder="Type a command..." onkeydown="handleTerminalKey(event, '2')">
+                        <button class="terminal-btn" onclick="sendTerminalCommand('2')">Send</button>
+                        <button class="terminal-btn stop" onclick="stopTerminal('2')">Stop</button>
+                        <button class="terminal-btn" onclick="clearTerminal('2')">CLS</button>
+                    </div>
+                </div>
             </div>
         </div>
         
@@ -622,9 +775,12 @@
         const chatContainer = document.getElementById('chatContainer');
 
         let cascades = [];
+        let availableRoots = [];
         let currentCascadeId = null;
         let lastActiveCascadeId = null;
         let ws = null;
+        let selectedManualContext = null; 
+        let terminalLogs = { '1': '', '2': '' };
 
         function showToast(msg, duration = 4000) {
             const existing = document.querySelector('.toast');
@@ -661,18 +817,65 @@
                         updateContentOnly(currentCascadeId);
                     }
                 }
+                if (data.type === 'terminal:output') {
+                    const logId = `terminalLog${data.id || '1'}`;
+                    const container = document.getElementById(logId);
+                    if (container) {
+                        const pre = document.createElement('span');
+                        pre.textContent = data.data;
+                        container.appendChild(pre);
+                        container.scrollTop = container.scrollHeight;
+                    }
+                }
+                if (data.type === 'terminal:clear') {
+                    const logId = `terminalLog${data.id || '1'}`;
+                    const container = document.getElementById(logId);
+                    if (container) container.innerHTML = '';
+                }
             };
 
             ws.onclose = () => setTimeout(connect, 2000);
         }
 
         function renderTabs() {
-            const cascadeTabs = cascades.map(c => `
-                <div class="cascade-tab ${c.id === currentCascadeId ? 'active' : ''} ${c.active ? 'active-window' : ''}" 
-                     onclick="selectCascade('${c.id}')">
-                    ${c.title || 'Untitled'}
-                </div>
-            `).join('');
+            // Pre-calculate colors for roots
+            const roots = [...new Set(cascades.map(c => c.projectRoot).filter(Boolean))];
+            const rootColors = {};
+            // Distinct semi-transparent background colors
+            const bgColors = [
+                'rgba(59, 130, 246, 0.15)', // Blue
+                'rgba(16, 185, 129, 0.15)', // Green
+                'rgba(245, 158, 11, 0.15)', // Amber
+                'rgba(239, 68, 68, 0.15)',  // Red
+                'rgba(139, 92, 246, 0.15)', // Violet
+                'rgba(236, 72, 153, 0.15)', // Pink
+                'rgba(6, 182, 212, 0.15)'   // Cyan
+            ];
+            const borderColors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4'];
+            
+            roots.forEach((r, i) => {
+                rootColors[r] = {
+                    bg: bgColors[i % bgColors.length],
+                    border: borderColors[i % borderColors.length]
+                };
+            });
+
+            const cascadeTabs = cascades.map(c => {
+                const colorSet = rootColors[c.projectRoot] || { bg: 'transparent', border: 'transparent' };
+                const isActive = c.id === currentCascadeId;
+                const style = `
+                    background: ${isActive ? colorSet.bg.replace('0.15', '0.4') : colorSet.bg};
+                    border-bottom: 2px solid ${colorSet.border};
+                    opacity: ${isActive ? '1' : '0.8'};
+                `;
+                return `
+                    <div class="cascade-tab ${c.active ? 'active-window' : ''}" 
+                         style="${style}"
+                         onclick="selectCascade('${c.id}')">
+                        ${c.title || 'Untitled'}
+                    </div>
+                `;
+            }).join('');
 
             const explorerTab = `
                 <div class="cascade-tab ${currentCascadeId === 'EXPLORER_VIEW' ? 'active' : ''}" 
@@ -695,10 +898,72 @@
                 </div>
             `;
 
-            tabsContainer.innerHTML = cascadeTabs + explorerTab + changesTab + gitTab;
+            const terminalTab = `
+                <div class="cascade-tab ${currentCascadeId === 'TERMINAL_VIEW' ? 'active' : ''}" 
+                     onclick="selectTerminalTab()">
+                    Terminal
+                </div>
+            `;
 
-            if (cascades.length === 0 && currentCascadeId !== 'DIFF_VIEW' && currentCascadeId !== 'EXPLORER_VIEW' && currentCascadeId !== 'GIT_HISTORY_VIEW') {
-                tabsContainer.innerHTML = '<div class="cascade-tab">No chats found</div>' + explorerTab + changesTab + gitTab;
+            tabsContainer.innerHTML = cascadeTabs + explorerTab + changesTab + gitTab + terminalTab;
+
+            if (cascades.length === 0 && currentCascadeId !== 'DIFF_VIEW' && currentCascadeId !== 'EXPLORER_VIEW' && currentCascadeId !== 'GIT_HISTORY_VIEW' && currentCascadeId !== 'TERMINAL_VIEW') {
+                tabsContainer.innerHTML = '<div class="cascade-tab">No chats found</div>' + explorerTab + changesTab + gitTab + terminalTab;
+            }
+            updateProjectContext();
+        }
+
+        async function loadInitialRoots() {
+            try {
+                const res = await fetch('/api/project-roots');
+                availableRoots = await res.json();
+                updateProjectContext();
+            } catch (e) {
+                console.error("Failed to load initial roots", e);
+            }
+        }
+
+        function updateProjectContext() {
+            const selector = document.getElementById('projectContextSelector');
+            const cascadeRoots = cascades.map(c => c.projectRoot).filter(p => !!p);
+            const allPossibleRoots = [...new Set([...availableRoots, ...cascadeRoots])];
+            
+            // Populate selector
+            const options = allPossibleRoots.map(root => {
+                const parts = root.split(/[\\/]/).filter(p => p.trim() !== '');
+                const name = parts[parts.length - 1] || root;
+                return `<option value="${root}" ${root === selectedManualContext ? 'selected' : ''}>${name}</option>`;
+            }).join('');
+            
+            selector.innerHTML = (allPossibleRoots.length === 0 ? '<option value="">None</option>' : '') + options;
+
+            // Default selection
+            if (!selectedManualContext && allPossibleRoots.length > 0) {
+                selectedManualContext = allPossibleRoots[0];
+                selector.value = selectedManualContext;
+            }
+
+            if (selectedManualContext) {
+                const rootIndex = allPossibleRoots.indexOf(selectedManualContext);
+                const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4'];
+                const activeColor = rootIndex !== -1 ? colors[rootIndex % colors.length] : '#3b82f6';
+                
+                document.getElementById('projectContext').style.borderColor = activeColor;
+                document.querySelector('.context-label').style.color = activeColor;
+            }
+        }
+
+        function manualContextChange(newRoot) {
+            selectedManualContext = newRoot;
+            updateProjectContext();
+            
+            // If in Terminal, re-subscribe
+            if (currentCascadeId === 'TERMINAL_VIEW') {
+                initTerminals();
+            }
+            // If in Explorer, reload
+            if (currentCascadeId === 'EXPLORER_VIEW') {
+                loadExplorerTree();
             }
         }
 
@@ -709,6 +974,7 @@
             document.getElementById('diffView').style.display = 'none';
             document.getElementById('explorerView').style.display = 'none';
             document.getElementById('gitHistoryView').style.display = 'none';
+            document.getElementById('terminalView').style.display = 'none';
             document.querySelector('.input-section').style.display = 'flex';
             renderTabs();
             loadCascade(id);
@@ -720,6 +986,7 @@
             document.getElementById('diffView').style.display = 'none';
             document.getElementById('explorerView').style.display = 'block';
             document.getElementById('gitHistoryView').style.display = 'none';
+            document.getElementById('terminalView').style.display = 'none';
             document.querySelector('.input-section').style.display = 'none';
             renderTabs();
             loadExplorerTree();
@@ -742,6 +1009,7 @@
             document.getElementById('diffView').style.display = 'block';
             document.getElementById('explorerView').style.display = 'none';
             document.getElementById('gitHistoryView').style.display = 'none';
+            document.getElementById('terminalView').style.display = 'none';
             document.querySelector('.input-section').style.display = 'none';
             
             // Default to Wrapping ON
@@ -761,18 +1029,121 @@
             document.getElementById('diffView').style.display = 'none';
             document.getElementById('explorerView').style.display = 'none';
             document.getElementById('gitHistoryView').style.display = 'block';
+            document.getElementById('terminalView').style.display = 'none';
             document.querySelector('.input-section').style.display = 'none';
             renderTabs();
             loadGitHistory();
         }
+
+        async function getProjectRoot() {
+             if (selectedManualContext) return selectedManualContext;
+             
+             const cascade = cascades.find(c => c.id === lastActiveCascadeId) || cascades[0];
+             if (cascade?.projectRoot) return cascade.projectRoot;
+             
+             const res = await fetch(`/explorer/tree`);
+             const data = await res.json();
+             return data.projectRoot;
+        }
+
+        function selectTerminalTab() {
+            currentCascadeId = 'TERMINAL_VIEW';
+            document.getElementById('chatContent').style.display = 'none';
+            document.getElementById('diffView').style.display = 'none';
+            document.getElementById('explorerView').style.display = 'none';
+            document.getElementById('gitHistoryView').style.display = 'none';
+            document.getElementById('terminalView').style.display = 'flex';
+            document.querySelector('.input-section').style.display = 'none';
+            renderTabs();
+            // Small delay to ensure container is visible for xterm to measure dimensions
+            setTimeout(initTerminals, 0);
+        }
+
+        async function initTerminals() {
+            const root = selectedManualContext;
+            if (!root && cascades.length > 0) {
+                // Try to find any root
+                const anyRoot = cascades.find(c => c.projectRoot)?.projectRoot;
+                if (anyRoot) selectedManualContext = anyRoot;
+            }
+
+            const activeRoot = selectedManualContext;
+            if (activeRoot && ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'terminal:subscribe', root: activeRoot, id: '1' }));
+                ws.send(JSON.stringify({ type: 'terminal:subscribe', root: activeRoot, id: '2' }));
+            }
+            
+            // Sync selector in Terminal view if it exists (the one in the header is global now)
+            // We can actually remove the local terminal selector or keep it in sync.
+            // Let's remove the redundancy for a cleaner UI.
+        }
+
+        function changeTerminalRoot(newRoot) {
+            selectedManualContext = newRoot;
+            updateProjectContext();
+            clearAllTerminals();
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'terminal:subscribe', root: selectedManualContext, id: '1' }));
+                ws.send(JSON.stringify({ type: 'terminal:subscribe', root: selectedManualContext, id: '2' }));
+            }
+        }
+
+        function handleTerminalKey(e, id) {
+            if (e.key === 'Enter') {
+                sendTerminalCommand(id);
+            }
+        }
+
+        async function sendTerminalCommand(id) {
+            const input = document.getElementById(`terminalInput${id}`);
+            const cmd = input.value;
+            if (!cmd) return;
+
+            const root = selectedManualContext;
+            if (!root) return;
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                    type: 'terminal:input',
+                    root,
+                    id,
+                    data: cmd + '\n'
+                }));
+            }
+            input.value = '';
+        }
+
+        async function stopTerminal(id) {
+            const root = selectedManualContext;
+            if (!root) return;
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                    type: 'terminal:kill',
+                    root,
+                    id
+                }));
+            }
+        }
+
+        function clearTerminal(id) {
+            const container = document.getElementById(`terminalLog${id}`);
+            if (container) container.innerHTML = '';
+        }
+
+        function clearAllTerminals() {
+            clearTerminal('1');
+            clearTerminal('2');
+        }
+
+        function fitTerminal() { /* no-op for now */ }
 
         async function loadGitHistory() {
              const container = document.getElementById('gitGraphContainer');
              container.innerHTML = '<div class="loading">Loading commits...</div>';
              
              try {
+                const root = await getProjectRoot();
                 // Load branches first for badge
-                const branchRes = await fetch(`/git/branches?cascadeId=${getActiveId()}`);
+                const branchRes = await fetch(`/git/branches?path=${encodeURIComponent(root)}&cascadeId=${getActiveId()}`);
                 const branchData = await branchRes.json();
                 if (branchData.branches) {
                     const active = branchData.branches.find(b => b.active);
@@ -780,7 +1151,7 @@
                 }
 
                 // Load logs
-                const logRes = await fetch(`/git/log?cascadeId=${getActiveId()}`);
+                const logRes = await fetch(`/git/log?path=${encodeURIComponent(root)}&cascadeId=${getActiveId()}`);
                 const logData = await logRes.json();
                 
                 if (logData.error) {
@@ -959,7 +1330,8 @@
             contentEl.dataset.currentFile = ''; // Reset current file on status reload
 
             try {
-                const res = await fetch(`/git/status?path=${encodeURIComponent(path)}&cascadeId=${getActiveId()}`);
+                const root = await getProjectRoot();
+                const res = await fetch(`/git/status?path=${encodeURIComponent(root)}&cascadeId=${getActiveId()}`);
                 const data = await res.json();
                 
                 if (data.error) {
@@ -1050,7 +1422,8 @@
             contentEl.innerHTML = '<div class="loading">Loading diff...</div>';
 
             try {
-                const url = `/git/diff?path=${encodeURIComponent(path)}&file=${encodeURIComponent(file)}&cascadeId=${getActiveId()}`;
+                const root = await getProjectRoot();
+                const url = `/git/diff?path=${encodeURIComponent(root)}&file=${encodeURIComponent(file)}&cascadeId=${getActiveId()}`;
                 const res = await fetch(url);
                 const data = await res.json();
 
@@ -1398,31 +1771,18 @@
 
         // === Explorer Tab Logic ===
 
-        function selectExplorerTab() {
-            currentCascadeId = 'EXPLORER_VIEW';
-            document.getElementById('chatContent').style.display = 'none';
-            document.getElementById('diffView').style.display = 'none';
-            document.getElementById('explorerView').style.display = 'block';
-            document.querySelector('.input-section').style.display = 'none';
-            renderTabs();
-            loadExplorerTree();
-        }
-
         let explorerEditingFile = { name: '', path: '' };
 
         async function loadExplorerTree() {
             const treeEl = document.getElementById('explorerTree');
-            const path = ''; // Default to root
+            const treeRoot = await getProjectRoot();
+            if (!treeRoot) return;
             treeEl.innerHTML = '<div class="explorer-empty">Loading...</div>';
 
             try {
-                const res = await fetch(`/explorer/tree?path=${encodeURIComponent(path)}&cascadeId=${getActiveId()}`);
+                const res = await fetch(`/explorer/tree?path=${encodeURIComponent(treeRoot)}&cascadeId=${getActiveId()}`);
                 const data = await res.json();
                 
-                if (data.projectRoot) {
-                    document.getElementById('currentRootPath').textContent = data.projectRoot;
-                }
-
                 if (data.error) {
                     treeEl.innerHTML = `<div style="color:#ef4444; padding:16px">${data.error}</div>`;
                     return;
@@ -1433,7 +1793,7 @@
                     return;
                 }
 
-                treeEl.innerHTML = renderTree(data.tree, 0, path);
+                treeEl.innerHTML = renderTree(data.tree, 0, treeRoot);
             } catch (e) {
                 treeEl.innerHTML = `<div style="color:#ef4444; padding:16px">Failed: ${e.message}</div>`;
             }
@@ -1555,6 +1915,7 @@
             }
         }
 
+        loadInitialRoots();
         connect();
     </script>
 </body>

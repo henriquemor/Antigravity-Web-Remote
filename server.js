@@ -16,7 +16,8 @@ import {
     relative
 } from 'path';
 import {
-    execSync
+    execSync,
+    spawn
 } from 'child_process';
 import fs from 'fs';
 
@@ -78,6 +79,115 @@ function hashString(str) {
     }
     return hash.toString(36);
 }
+
+class TerminalInstance {
+    constructor(root, onData, onExit) {
+        this.root = root;
+        this.onData = onData;
+        this.onExit = onExit;
+        this.buffer = '';
+        this.maxBufferLength = 10000; // lines or chars? let's do lines eventually
+        this.history = []; // last ~1000 lines
+        
+        // Spawn shell (PowerShell on Windows, sh elsewhere)
+        const shell = process.platform === 'win32' ? 'powershell.exe' : 'sh';
+        this.proc = spawn(shell, [], {
+            cwd: root,
+            env: process.env,
+            shell: true
+        });
+
+        this.proc.stdout.on('data', (data) => this.handleOutput(data));
+        this.proc.stderr.on('data', (data) => this.handleOutput(data));
+        this.proc.on('exit', () => onExit());
+    }
+
+    handleOutput(data) {
+        const text = data.toString();
+        this.history.push(text);
+        if (this.history.length > 1000) this.history.shift();
+        this.onData(text);
+    }
+
+    write(data) {
+        if (this.proc && this.proc.stdin.writable) {
+            this.proc.stdin.write(data);
+        }
+    }
+
+    resize(cols, rows) {
+        // Standard child_process.spawn doesn't support pseudo-terminal resizing well
+        // We'd need node-pty for that. For now, we skip.
+    }
+
+    kill() {
+        if (this.proc) this.proc.kill();
+    }
+}
+
+class TerminalManager {
+    constructor() {
+        this.terminals = new Map(); // key (root+id) -> TerminalInstance
+    }
+
+    getKey(root, id) {
+        return `${root}::${id}`;
+    }
+
+    getOrCreate(root, id, onData) {
+        const key = this.getKey(root, id);
+        if (this.terminals.has(key)) {
+            const term = this.terminals.get(key);
+            if (onData) {
+                term.onData = onData; // Update callback to current WS
+            }
+            return term;
+        }
+
+        const term = new TerminalInstance(root, onData, () => {
+            console.log(`Terminal ${id} at ${root} exited.`);
+            this.terminals.delete(key);
+        });
+        this.terminals.set(key, term);
+        return term;
+    }
+
+    sendHistory(root, id, onData) {
+        const key = this.getKey(root, id);
+        const term = this.terminals.get(key);
+        if (term && term.history.length > 0) {
+            onData(term.history.join(''));
+        }
+    }
+
+    write(root, id, data, ws) {
+        const key = this.getKey(root, id);
+        const term = this.terminals.get(key);
+        if (term) {
+            // Check for clear/cls
+            const trimmed = data.trim().toLowerCase();
+            if (trimmed === 'clear' || trimmed === 'cls') {
+                term.history = [];
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({ type: 'terminal:clear', root, id }));
+                }
+            }
+            term.write(data);
+        }
+    }
+
+    kill(root, id) {
+        const key = this.getKey(root, id);
+        const term = this.terminals.get(key);
+        if (term) {
+            term.kill();
+            // TerminalInstance's onExit will remove it from map, 
+            // but we might want to restart it immediately for the user or let them send next cmd.
+        }
+    }
+}
+
+const terminalManager = new TerminalManager();
 
 // HTTP GET JSON
 function getJson(url) {
@@ -549,7 +659,8 @@ function broadcastCascadeList() {
         id: c.id,
         title: c.metadata.chatTitle,
         window: c.metadata.windowTitle,
-        active: c.metadata.isActive
+        active: c.metadata.isActive,
+        projectRoot: c.projectRoot
     }));
     broadcast({
         type: 'cascade_list',
@@ -574,8 +685,18 @@ async function main() {
         res.json(Array.from(cascades.values()).map(c => ({
             id: c.id,
             title: c.metadata.chatTitle,
-            active: c.metadata.isActive
+            active: c.metadata.isActive,
+            projectRoot: c.projectRoot
         })));
+    });
+
+    app.get('/api/project-roots', (req, res) => {
+        const roots = [...new Set(Array.from(cascades.values()).map(c => c.projectRoot).filter(Boolean))];
+        // Ensure REPO_ROOT is also there if not already
+        if (REPO_ROOT && !roots.includes(REPO_ROOT)) {
+            roots.unshift(REPO_ROOT);
+        }
+        res.json(roots);
     });
 
     app.get('/snapshot/:id', (req, res) => {
@@ -1028,6 +1149,36 @@ async function main() {
 
     wss.on('connection', (ws) => {
         broadcastCascadeList(); // Send list on connect
+
+        ws.on('message', (data) => {
+            let msg;
+            try { msg = JSON.parse(data); } catch (e) { return; }
+
+            if (msg.type === 'terminal:input') {
+                const root = msg.root || REPO_ROOT;
+                const id = msg.id || '1';
+                terminalManager.write(root, id, msg.data, ws);
+            }
+
+            if (msg.type === 'terminal:kill') {
+                const root = msg.root || REPO_ROOT;
+                const id = msg.id || '1';
+                terminalManager.kill(root, id);
+                ws.send(JSON.stringify({ type: 'terminal:output', root, id, data: '\n[Command Stopped by User]\n' }));
+            }
+
+            if (msg.type === 'terminal:subscribe') {
+                const root = msg.root || REPO_ROOT;
+                const id = msg.id || '1';
+                const callback = (outData) => {
+                    if (ws.readyState === WebSocket.OPEN) {
+                        ws.send(JSON.stringify({ type: 'terminal:output', root, id, data: outData }));
+                    }
+                };
+                terminalManager.getOrCreate(root, id, callback);
+                terminalManager.sendHistory(root, id, callback);
+            }
+        });
     });
 
     const PORT = process.env.PORT || 3000;
