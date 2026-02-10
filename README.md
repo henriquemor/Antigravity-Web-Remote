@@ -26,6 +26,8 @@ This fork extends the original project from [lukasz-wronski antigravity-shit-cha
 
 ---
 
+note: the code was tested only on a Windows machine.
+
 ## 🛠️ Installation & Usage
 
 ### 1. Install Dependencies
