@@ -1237,12 +1237,18 @@
                             margin-bottom: 10px !important;
                         }
                         
-                        /* Specific fix for the 20px height div - Second div of #conversation */
+                        /* Specific fix for the input bottom div - Second div of #conversation */
                         #cascade #conversation > div:nth-child(2),
                         #conversation > div:nth-child(2) {
-                            height: 60px !important;
+                            height: 80px !important;
                             opacity: 0.5 !important;
-                            margin-top: 2em;
+                            margin-top: 3em;
+                        }
+                            #cascade #conversation > div:nth-child(2),
+                        #conversation > div:nth-child(2):active, #cascade #conversation > div:nth-child(2),
+                        #conversation > div:nth-child(2):hover {
+                            height: 400px !important;
+                            opacity: 1 !important;
                         }
                         
                         /* Hide input/footer areas that might leak */
@@ -1337,13 +1343,14 @@
             }
         });
 
-        // Relay button clicks back to Antigravity
+        // Relay button/element clicks back to Antigravity
         chatContent.addEventListener('click', async (e) => {
-            const btn = e.target.closest('button');
-            if (!btn || !currentCascadeId) return;
+            // Find closest element with a relay ID (can be button, div, span, etc.)
+            const target = e.target.closest('[data-relay-id]');
+            if (!target || !currentCascadeId) return;
 
-            const relayId = btn.getAttribute('data-relay-id');
-            if (!relayId) return; // Not a relayable button
+            const relayId = target.getAttribute('data-relay-id');
+            if (!relayId) return;
 
             e.preventDefault();
             e.stopPropagation();
@@ -1367,8 +1374,9 @@
                     showToast(err.error || err.reason || 'Click failed');
                 }
 
-                // Refresh after click
+                // Refresh after click - two passes: quick visual + delayed for new elements (selects)
                 setTimeout(() => updateContentOnly(currentCascadeId), 300);
+                setTimeout(() => updateContentOnly(currentCascadeId), 1200);
             } catch (err) {
                 console.error('Click relay error:', err);
                 showToast('Network error: ' + err.message);

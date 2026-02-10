@@ -110,8 +110,9 @@ async function connectCDP(url) {
 
     await call("Runtime.enable", {});
     await new Promise(r => setTimeout(r, 1000)); // increased wait
-    if (contexts.length === 0) console.log("⚠️ No execution contexts found yet");
-    else console.log(`📡 Discovered ${contexts.length} contexts`);
+    // Quiet context logging
+    // if (contexts.length === 0) console.log("⚠️ No execution contexts found yet");
+    // else console.log(`📡 Discovered ${contexts.length} contexts`);
 
     return {
         ws,
@@ -152,9 +153,9 @@ async function extractMetadata(cdp) {
     })()`;
 
     // Search all contexts
-    if (cdp.contexts.length === 0) {
-        console.log("  ⚠️ No contexts to search");
-    }
+    // if (cdp.contexts.length === 0) {
+    //    console.log("  ⚠️ No contexts to search");
+    // }
 
     for (const ctx of cdp.contexts) {
         try {
@@ -167,11 +168,11 @@ async function extractMetadata(cdp) {
             });
             
             if (result.result && result.result.value && result.result.value.found) {
-                console.log(`  ✅ Found chat in context ${ctx.id} (${ctx.origin})`);
+                // console.log(`  ✅ Found chat in context ${ctx.id} (${ctx.origin})`);
                 return { ...result.result.value, contextId: ctx.id };
             }
         } catch (e) {
-            console.log(`  ❌ Error in context ${ctx.id}: ${e.message}`);
+            // console.log(`  ❌ Error in context ${ctx.id}: ${e.message}`);
         }
     }
     return null;
@@ -234,23 +235,35 @@ async function captureHTML(cdp) {
             return path;
         }
         
-        const buttons = cascade.querySelectorAll('button');
+        // Capture standard buttons AND clickable divs (Headless UI options often use divs with cursor-pointer)
+        const buttons = cascade.querySelectorAll('button, div[role="button"], div[role="option"], div.cursor-pointer');
         const buttonMap = {};
         
         const clone = cascade.cloneNode(true);
-        const cloneButtons = clone.querySelectorAll('button');
+        // We must select from clone using same logic, but be careful of index alignment.
+        // querySelectorAll returns a static NodeList in order of document.
+        const cloneButtons = clone.querySelectorAll('button, div[role="button"], div[role="option"], div.cursor-pointer');
         
-        // Tag buttons in CLONE only, store paths + text for originals
+        // Tag interactive elements in CLONE only
         buttons.forEach((btn, i) => {
             const id = 'btn-' + i;
             const path = getPath(btn, cascade);
-            // Store path and text for verification during click
+            // Store path and text for verification
+            let text = btn.textContent.trim().slice(0, 50);
+            if (!text && btn.getAttribute('aria-label')) text = btn.getAttribute('aria-label');
+
             buttonMap[id] = { 
                 path: path, 
-                text: btn.textContent.trim().slice(0, 50) // First 50 chars for matching
+                text: text
             };
             if (cloneButtons[i]) {
                 cloneButtons[i].setAttribute('data-relay-id', id);
+                // Visual indicator for clickable divs
+                if (cloneButtons[i].tagName === 'DIV') {
+                    cloneButtons[i].style.cursor = 'pointer';
+                    // Optional: highlight slightly to show it's interactive
+                    // cloneButtons[i].style.outline = '1px dashed rgba(255,255,255,0.1)';
+                }
             }
         });
 
@@ -395,8 +408,8 @@ async function discover() {
         }));
     }));
     
-    console.log(`🔍 Found targets: ${allTargets.length}`);
-    allTargets.forEach(t => console.log(`  - [${t.port}] ${t.title} (URL: ${t.url?.split('/').pop()})`));
+    // console.log(`🔍 Found targets: ${allTargets.length}`);
+    // allTargets.forEach(t => console.log(`  - [${t.port}] ${t.title} (URL: ${t.url?.split('/').pop()})`));
 
     const newCascades = new Map();
 
@@ -424,7 +437,7 @@ async function discover() {
 
         // New connection
         try {
-            console.log(`🔌 Connecting to ${target.title}`);
+            // console.log(`🔌 Connecting to ${target.title}`);
             const cdp = await connectCDP(target.webSocketDebuggerUrl);
             const meta = await extractMetadata(cdp);
 
@@ -443,7 +456,7 @@ async function discover() {
                     snapshotHash: null
                 };
                 newCascades.set(id, cascade);
-                console.log(`✨ Added cascade: ${meta.chatTitle}`);
+                // console.log(`✨ Added cascade: ${meta.chatTitle}`);
             } else {
                 cdp.ws.close();
             }
@@ -921,12 +934,22 @@ async function main() {
         console.log(`Click in ${c.metadata.chatTitle}: relayId=${relayId}, text="${buttonInfo.text}"`);
 
         const result = await injectClick(c.cdp, buttonInfo.path, buttonInfo.text);
-        if (result.ok) res.json({
-            success: true
-        });
+        if (result.ok) {
+            res.json({ success: true });
+            // Force re-capture after a short delay so new UI elements (selects, buttons) are captured
+            setTimeout(async () => {
+                try {
+                    const snap = await captureHTML(c.cdp);
+                    if (snap) {
+                        c.snapshot = snap;
+                        c.snapshotHash = hashString(snap.html);
+                        broadcast({ type: 'snapshot_update', cascadeId: c.id });
+                    }
+                } catch(e) {}
+            }, 500);
+        }
         else res.status(500).json(result);
     });
-
 
     wss.on('connection', (ws) => {
         broadcastCascadeList(); // Send list on connect
@@ -1041,19 +1064,26 @@ async function injectClick(cdp, path, expectedText) {
             el = el.children[idx];
         }
         
-        if (el.tagName !== 'BUTTON') {
-            return { ok: false, reason: 'element is not a button', tag: el.tagName };
+        if (el.tagName !== 'BUTTON' && el.tagName !== 'DIV' && el.tagName !== 'A' && el.tagName !== 'SPAN') {
+            return { ok: false, reason: 'element is not interactive', tag: el.tagName };
         }
         
         // Verify text content matches (first 50 chars)
-        const actualText = el.textContent.trim().slice(0, 50);
+        // Check textContent and aria-label
+        let actualText = el.textContent.trim().slice(0, 50);
+        if (!actualText && el.getAttribute('aria-label')) actualText = el.getAttribute('aria-label');
+        
         if (actualText !== expectedText) {
-            return { 
-                ok: false, 
-                reason: 'text mismatch - DOM may have changed', 
-                expected: expectedText, 
-                actual: actualText 
-            };
+             // For some precise UI elements, text might differ slightly due to hidden children.
+             // Let's be lenient if expectedText is empty or very short, or if it's a structural div.
+             if (expectedText && expectedText.length > 3 && !actualText.includes(expectedText.substring(0, 10))) {
+                 return { 
+                    ok: false, 
+                    reason: 'text mismatch - DOM may have changed', 
+                    expected: expectedText, 
+                    actual: actualText 
+                };
+             }
         }
         
         el.click();
