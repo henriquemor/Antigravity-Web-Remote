@@ -20,17 +20,51 @@ import {
 } from 'child_process';
 import fs from 'fs';
 
-const __filename = fileURLToPath(
-    import.meta.url);
+const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+
+// Helper to find repository root (folder with .git)
+function findRepoRoot(startPath) {
+    try {
+        let curr = startPath;
+        // Search up to 5 levels up
+        for (let i = 0; i < 5; i++) {
+            if (fs.existsSync(join(curr, '.git'))) return curr;
+            const parent = dirname(curr);
+            if (parent === curr) break;
+            curr = parent;
+        }
+    } catch (e) {}
+    return startPath;
+}
+
+const REPO_ROOT = findRepoRoot(__dirname);
 
 const PORTS = [9000];
 const DISCOVERY_INTERVAL = 10000;
 const POLL_INTERVAL = 3000;
 
 // Application State
-let cascades = new Map(); // Map<cascadeId, { id, cdp: { ws, contexts, rootContextId }, metadata, snapshot, snapshotHash }>
+let cascades = new Map(); // Map<cascadeId, { id, cdp: { ws, contexts, rootContextId }, metadata, snapshot, snapshotHash, projectRoot }>
 let wss = null;
+
+// Determine a likely project root from a title and current REPO_ROOT
+function guessProjectRoot(windowTitle) {
+    if (!windowTitle) return REPO_ROOT;
+    
+    // Antigravity titles are often "Folder - Antigravity"
+    const name = windowTitle.split(' - ')[0].trim();
+    if (!name) return REPO_ROOT;
+
+    const parentDir = dirname(REPO_ROOT);
+    const guessedPath = join(parentDir, name);
+    
+    if (fs.existsSync(guessedPath) && fs.lstatSync(guessedPath).isDirectory()) {
+        return guessedPath;
+    }
+    
+    return REPO_ROOT;
+}
 
 // --- Helpers ---
 
@@ -446,6 +480,7 @@ async function discover() {
                 const cascade = {
                     id,
                     cdp,
+                    projectRoot: guessProjectRoot(target.title),
                     metadata: {
                         windowTitle: target.title,
                         chatTitle: meta.chatTitle,
@@ -596,7 +631,8 @@ async function main() {
 
     // Git integration
     app.get('/git/status', (req, res) => {
-        const projectPath = req.query.path || dirname(__filename);
+        const cascade = cascades.get(req.query.cascadeId) || Array.from(cascades.values())[0];
+        const projectPath = req.query.path || cascade?.projectRoot || REPO_ROOT;
         try {
             const status = execSync('git status --short', {
                 cwd: projectPath
@@ -612,7 +648,8 @@ async function main() {
     });
 
     app.get('/git/diff', (req, res) => {
-        const projectPath = req.query.path || dirname(__filename);
+        const cascade = cascades.get(req.query.cascadeId) || Array.from(cascades.values())[0];
+        const projectPath = req.query.path || cascade?.projectRoot || REPO_ROOT;
         const file = req.query.file;
         try {
             let diff = '';
@@ -681,7 +718,8 @@ async function main() {
     });
 
     app.post('/git/stage', (req, res) => {
-        const projectPath = req.body.path || dirname(__filename);
+        const cascade = cascades.get(req.body.cascadeId) || Array.from(cascades.values())[0];
+        const projectPath = req.body.path || cascade?.projectRoot || REPO_ROOT;
         const file = req.body.file;
         try {
             execSync(`git add "${file}"`, {
@@ -698,7 +736,8 @@ async function main() {
     });
 
     app.post('/git/unstage', (req, res) => {
-        const projectPath = req.body.path || dirname(__filename);
+        const cascade = cascades.get(req.body.cascadeId) || Array.from(cascades.values())[0];
+        const projectPath = req.body.path || cascade?.projectRoot || REPO_ROOT;
         const file = req.body.file;
         try {
             execSync(`git restore --staged "${file}"`, {
@@ -715,7 +754,8 @@ async function main() {
     });
 
     app.post('/git/commit', (req, res) => {
-        const projectPath = req.body.path || dirname(__filename);
+        const cascade = cascades.get(req.body.cascadeId) || Array.from(cascades.values())[0];
+        const projectPath = req.body.path || cascade?.projectRoot || REPO_ROOT;
         const message = req.body.message;
         try {
             execSync(`git commit -m "${message.replace(/"/g, '\\"')}"`, {
@@ -732,7 +772,8 @@ async function main() {
     });
 
     app.get('/git/read', (req, res) => {
-        const projectPath = req.query.path || dirname(__filename);
+        const cascade = cascades.get(req.query.cascadeId) || Array.from(cascades.values())[0];
+        const projectPath = req.query.path || cascade?.projectRoot || REPO_ROOT;
         const file = req.query.file;
         try {
             const fullPath = join(projectPath, file);
@@ -748,7 +789,8 @@ async function main() {
     });
 
     app.post('/git/save', (req, res) => {
-        const projectPath = req.body.path || dirname(__filename);
+        const cascade = cascades.get(req.body.cascadeId) || Array.from(cascades.values())[0];
+        const projectPath = req.body.path || cascade?.projectRoot || REPO_ROOT;
         const file = req.body.file;
         const content = req.body.content;
         try {
@@ -766,7 +808,8 @@ async function main() {
 
     // Explorer - file tree
     app.get('/explorer/tree', (req, res) => {
-        const projectPath = req.query.path || dirname(__filename);
+        const cascade = cascades.get(req.query.cascadeId) || Array.from(cascades.values())[0];
+        const projectPath = req.query.path || cascade?.projectRoot || REPO_ROOT;
 
         // Hard-coded exclusions + read .gitignore
         const defaultExcludes = ['node_modules', '.git', '.DS_Store', 'Thumbs.db', '.env', '.env.local'];
@@ -825,7 +868,10 @@ async function main() {
 
         try {
             const tree = walk(projectPath);
-            res.json({ tree });
+            res.json({ 
+                tree,
+                projectRoot: projectPath
+            });
         } catch (e) {
             res.status(500).json({ error: 'Failed to read directory: ' + e.message });
         }
@@ -833,7 +879,8 @@ async function main() {
 
     // Git History & Graph
     app.get('/git/log', (req, res) => {
-        const projectPath = req.query.path || dirname(__filename);
+        const cascade = cascades.get(req.query.cascadeId) || Array.from(cascades.values())[0];
+        const projectPath = req.query.path || cascade?.projectRoot || REPO_ROOT;
         try {
             // Get commits: hash|author|date|message|refs
             const logOut = execSync('git log --pretty=format:"%h|%an|%ad|%s|%D" --date=short -n 50', { cwd: projectPath }).toString();
@@ -848,7 +895,8 @@ async function main() {
     });
 
     app.get('/git/commit-files', (req, res) => {
-        const projectPath = req.query.path || dirname(__filename);
+        const cascade = cascades.get(req.query.cascadeId) || Array.from(cascades.values())[0];
+        const projectPath = req.query.path || cascade?.projectRoot || REPO_ROOT;
         const hash = req.query.hash;
         try {
             // Get files changed in this commit
@@ -864,7 +912,8 @@ async function main() {
     });
 
     app.get('/git/branches', (req, res) => {
-        const projectPath = req.query.path || dirname(__filename);
+        const cascade = cascades.get(req.query.cascadeId) || Array.from(cascades.values())[0];
+        const projectPath = req.query.path || cascade?.projectRoot || REPO_ROOT;
         try {
             const branchOut = execSync('git branch -a', { cwd: projectPath }).toString();
             const branches = branchOut.split('\n').filter(l => l.trim()).map(l => {
@@ -879,7 +928,8 @@ async function main() {
     });
 
     app.post('/git/push', (req, res) => {
-        const projectPath = req.body.path || dirname(__filename);
+        const cascade = cascades.get(req.body.cascadeId) || Array.from(cascades.values())[0];
+        const projectPath = req.body.path || cascade?.projectRoot || REPO_ROOT;
         try {
             execSync('git push', { cwd: projectPath });
             res.json({ ok: true });
@@ -889,7 +939,8 @@ async function main() {
     });
 
     app.post('/git/sync', (req, res) => {
-        const projectPath = req.body.path || dirname(__filename);
+        const cascade = cascades.get(req.body.cascadeId) || Array.from(cascades.values())[0];
+        const projectPath = req.body.path || cascade?.projectRoot || REPO_ROOT;
         try {
             execSync('git pull --rebase', { cwd: projectPath });
             execSync('git push', { cwd: projectPath });
@@ -900,7 +951,8 @@ async function main() {
     });
 
     app.get('/git/diff-commit', (req, res) => {
-        const projectPath = req.query.path || dirname(__filename);
+        const cascade = cascades.get(req.query.cascadeId) || Array.from(cascades.values())[0];
+        const projectPath = req.query.path || cascade?.projectRoot || REPO_ROOT;
         const hash = req.query.hash;
         const file = req.query.file;
         try {

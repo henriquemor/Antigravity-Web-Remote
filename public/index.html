@@ -574,7 +574,7 @@
         <div id="explorerView">
             <div id="explorerTreeContainer">
                 <div class="explorer-path-bar">
-                    
+                    <div id="currentRootPath" style="font-size: 10px; color: #888; position: absolute; top: -18px; left: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 90%;">...</div>
                     <button onclick="loadExplorerTree()" style="flex:1; padding: 8px;">Refresh</button>
                 </div>
                 <div class="explorer-tree" id="explorerTree">
@@ -623,6 +623,7 @@
 
         let cascades = [];
         let currentCascadeId = null;
+        let lastActiveCascadeId = null;
         let ws = null;
 
         function showToast(msg, duration = 4000) {
@@ -636,6 +637,8 @@
 
             setTimeout(() => toast.remove(), duration);
         }
+
+        const getActiveId = () => lastActiveCascadeId || currentCascadeId;
 
         function connect() {
             ws = new WebSocket(`ws://${location.host}`);
@@ -701,6 +704,7 @@
 
         function selectCascade(id) {
             currentCascadeId = id;
+            lastActiveCascadeId = id;
             document.getElementById('chatContent').style.display = 'block';
             document.getElementById('diffView').style.display = 'none';
             document.getElementById('explorerView').style.display = 'none';
@@ -768,7 +772,7 @@
              
              try {
                 // Load branches first for badge
-                const branchRes = await fetch('/git/branches');
+                const branchRes = await fetch(`/git/branches?cascadeId=${getActiveId()}`);
                 const branchData = await branchRes.json();
                 if (branchData.branches) {
                     const active = branchData.branches.find(b => b.active);
@@ -776,7 +780,7 @@
                 }
 
                 // Load logs
-                const logRes = await fetch('/git/log');
+                const logRes = await fetch(`/git/log?cascadeId=${getActiveId()}`);
                 const logData = await logRes.json();
                 
                 if (logData.error) {
@@ -813,7 +817,7 @@
             } else {
                 el.style.display = 'block';
                 if (!el.dataset.loaded) {
-                    const res = await fetch(`/git/commit-files?hash=${hash}`);
+                    const res = await fetch(`/git/commit-files?hash=${hash}&cascadeId=${getActiveId()}`);
                     const data = await res.json();
                     if (data.files) {
                         // Pass message (escaped)
@@ -845,7 +849,7 @@
 
                 // Fetch files for this commit to populate the sidebar
                 try {
-                    const resFiles = await fetch(`/git/commit-files?hash=${hash}`);
+                    const resFiles = await fetch(`/git/commit-files?hash=${hash}&cascadeId=${getActiveId()}`);
                     const dataFiles = await resFiles.json();
                     
                     if (dataFiles.files) {
@@ -891,7 +895,7 @@
             contentEl.innerHTML = '<div class="loading">Loading diff...</div>';
             
             try {
-                const res = await fetch(`/git/diff-commit?hash=${hash}&file=${encodeURIComponent(file)}`);
+                const res = await fetch(`/git/diff-commit?hash=${hash}&file=${encodeURIComponent(file)}&cascadeId=${getActiveId()}`);
                 const data = await res.json();
                 if (data.diff) {
                     const html = data.diff.split('\n').map(l => {
@@ -918,7 +922,11 @@
         async function pushChanges() {
             showToast('Pushing...');
             try {
-                const res = await fetch('/git/push', { method: 'POST' });
+                const res = await fetch('/git/push', { 
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ cascadeId: getActiveId() })
+                });
                 const data = await res.json();
                 if (data.ok) showToast('<span style="color:#4ade80">✓ Push Successful</span>');
                 else showToast('Push failed: ' + data.error);
@@ -929,7 +937,11 @@
         async function syncChanges() {
              showToast('Syncing (Pull --rebase + Push)...');
             try {
-                const res = await fetch('/git/sync', { method: 'POST' });
+                const res = await fetch('/git/sync', { 
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ cascadeId: getActiveId() })
+                });
                 const data = await res.json();
                 if (data.ok) showToast('<span style="color:#4ade80">✓ Sync Successful</span>');
                 else showToast('Sync failed: ' + data.error);
@@ -947,7 +959,7 @@
             contentEl.dataset.currentFile = ''; // Reset current file on status reload
 
             try {
-                const res = await fetch(`/git/status?path=${encodeURIComponent(path)}`);
+                const res = await fetch(`/git/status?path=${encodeURIComponent(path)}&cascadeId=${getActiveId()}`);
                 const data = await res.json();
                 
                 if (data.error) {
@@ -1038,7 +1050,7 @@
             contentEl.innerHTML = '<div class="loading">Loading diff...</div>';
 
             try {
-                const url = `/git/diff?path=${encodeURIComponent(path)}&file=${encodeURIComponent(file)}`;
+                const url = `/git/diff?path=${encodeURIComponent(path)}&file=${encodeURIComponent(file)}&cascadeId=${getActiveId()}`;
                 const res = await fetch(url);
                 const data = await res.json();
 
@@ -1110,7 +1122,7 @@
                 await fetch('/git/stage', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ file, path })
+                    body: JSON.stringify({ file, path, cascadeId: getActiveId() })
                 });
                 loadGitStatus();
             } catch (err) { alert(err.message); }
@@ -1122,7 +1134,7 @@
                 await fetch('/git/unstage', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ file, path })
+                    body: JSON.stringify({ file, path, cascadeId: getActiveId() })
                 });
                 loadGitStatus();
             } catch (err) { alert(err.message); }
@@ -1138,7 +1150,7 @@
             document.getElementById('editingFileName').innerText = `Editing: ${file}`;
             
             try {
-                const res = await fetch(`/git/read?file=${encodeURIComponent(file)}&path=${encodeURIComponent(path)}`);
+                const res = await fetch(`/git/read?file=${encodeURIComponent(file)}&path=${encodeURIComponent(path)}&cascadeId=${getActiveId()}`);
                 const data = await res.json();
                 document.getElementById('rawEditor').value = data.content;
             } catch (err) { alert(err.message); }
@@ -1158,7 +1170,8 @@
                     body: JSON.stringify({ 
                         file: editingFile.name, 
                         path: editingFile.path, 
-                        content 
+                        content,
+                        cascadeId: getActiveId() 
                     })
                 });
                 closeEditor();
@@ -1175,7 +1188,7 @@
                 const res = await fetch('/git/commit', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ path, message: msg })
+                    body: JSON.stringify({ path, message: msg, cascadeId: getActiveId() })
                 });
                 const data = await res.json();
                 if (data.ok) {
@@ -1403,8 +1416,12 @@
             treeEl.innerHTML = '<div class="explorer-empty">Loading...</div>';
 
             try {
-                const res = await fetch(`/explorer/tree?path=${encodeURIComponent(path)}`);
+                const res = await fetch(`/explorer/tree?path=${encodeURIComponent(path)}&cascadeId=${getActiveId()}`);
                 const data = await res.json();
+                
+                if (data.projectRoot) {
+                    document.getElementById('currentRootPath').textContent = data.projectRoot;
+                }
 
                 if (data.error) {
                     treeEl.innerHTML = `<div style="color:#ef4444; padding:16px">${data.error}</div>`;
@@ -1496,7 +1513,7 @@
             document.getElementById('explorerEditor').value = 'Loading...';
 
             try {
-                const res = await fetch(`/git/read?file=${encodeURIComponent(filePath)}&path=${encodeURIComponent(projectPath)}`);
+                const res = await fetch(`/git/read?file=${encodeURIComponent(filePath)}&path=${encodeURIComponent(projectPath)}&cascadeId=${getActiveId()}`);
                 const data = await res.json();
                 if (data.error) {
                     document.getElementById('explorerEditor').value = 'Error: ' + data.error;
@@ -1522,7 +1539,8 @@
                     body: JSON.stringify({
                         file: explorerEditingFile.name,
                         path: explorerEditingFile.path,
-                        content
+                        content,
+                        cascadeId: getActiveId()
                     })
                 });
                 const data = await res.json();
