@@ -14,13 +14,11 @@
         }
 
         .terminal-log {
-            flex: 1;
             background: #000;
             color: #ddd;
             padding: 10px;
             font-family: 'Consolas', 'Courier New', monospace;
             font-size: 11px;
-            overflow-y: auto;
             white-space: pre-wrap;
             word-break: break-all;
             line-height: 1.4;
@@ -58,14 +56,11 @@
             font-family: 'Segoe UI', sans-serif !important;
             background: #1a1a1a !important;
             color: #fff !important;
-            height: 100vh;
-            /* Fallback */
-            height: 100dvh;
-            /* Dynamic constraint */
+            min-height: 100dvh;
             display: flex;
             flex-direction: column;
-            overflow: hidden;
             margin: 0 !important;
+            padding-bottom: 120px; /* Space for fixed input */
         }
 
         .app-header {
@@ -74,6 +69,9 @@
             background: #2a2a2a;
             border-bottom: 1px solid #3a3a3a;
             justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 2000;
         }
 
         .headers-container {
@@ -165,17 +163,13 @@
         /* Green if optimized/active window */
 
         .chat-container {
-            flex: 1;
             display: flex;
             flex-direction: column;
-            overflow: hidden;
             position: relative;
         }
 
         .chat-content {
             padding: 0;
-            flex: 1;
-            overflow-y: auto;
         }
 
         /* Mirror Cleanup Fixes */
@@ -206,9 +200,11 @@
             /* Account for mobile safe areas */
             padding-bottom: calc(12px + env(safe-area-inset-bottom));
             border-top: 1px solid #3a3a3a !important;
-            position: relative;
-            z-index: 1000;
-            /* Increased z-index */
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            z-index: 2000;
             display: flex;
             gap: 8px;
         }
@@ -641,6 +637,24 @@
             padding: 40px 20px;
             font-size: 14px;
         }
+
+        #diffView {
+            display: none;
+            flex-direction: column;
+            padding: 16px;
+        }
+
+        #gitHistoryView {
+            display: none;
+            flex-direction: column;
+            padding: 0;
+        }
+
+        #explorerView {
+            display: none;
+            flex-direction: column;
+            padding: 0;
+        }
     </style>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" />
     <style id="cascade-style">
@@ -667,7 +681,7 @@
         <div class="chat-content" id="chatContent">
             <div class="loading">Waiting for connection...</div>
         </div>
-        <div id="diffView" style="display:none; padding: 16px;">
+        <div id="diffView">
             <div style="margin-bottom: 12px; display:flex; gap: 8px;">
                 <button onclick="loadGitStatus()" style="flex:1; padding: 8px;">Refresh</button>
                 <button id="toolbarWrapBtn" onclick="toggleDiffWrap()" style="flex:1; padding: 8px; background:#2f2f2f;">Wrap: on</button>
@@ -690,8 +704,8 @@
             </div>
 
         </div>
-        <div id="explorerView" style="display:none; height:100%; flex-direction:column;">
-            <div id="explorerTreeContainer" style="flex:1; overflow-y:auto; padding-top: 10px;">
+        <div id="explorerView">
+            <div id="explorerTreeContainer" style="padding-top: 10px;">
                 <div class="explorer-tree" id="explorerTree">
                     <div class="explorer-empty">Loading project...</div>
                 </div>
@@ -710,8 +724,8 @@
             </div>
         </div>
 
-        <div id="terminalView" style="display:none; flex:1; height: 100%; flex-direction:column; overflow:hidden; background: #000;">
-            <div style="padding: 6px 10px; background: #1a1a1a; color: #888; font-size: 11px; border-bottom: 1px solid #333; display: flex; justify-content: space-between; align-items: center;">
+        <div id="terminalView" style="display:none; flex-direction:column; background: #000;">
+            <div style="padding: 6px 10px; background: #1a1a1a; color: #888; font-size: 11px; border-bottom: 1px solid #333; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 40px; z-index: 10;">
                 <div style="display:flex; align-items:center; gap:8px;">
                     <span style="color:#555; text-transform:uppercase; font-size:9px; letter-spacing:0.5px; font-weight:bold;">Dual Terminal Mode</span>
                 </div>
@@ -720,9 +734,9 @@
                     <button onclick="clearAllTerminals()" class="terminal-btn clear" style="padding:2px 6px; font-size:10px;">Clear All</button>
                 </span>
             </div>
-            <div style="flex: 1; display: flex; flex-direction: column; overflow: hidden;">
+            <div style="display: flex; flex-direction: column;">
                 <!-- Term 1 -->
-                <div style="flex: 1; display: flex; flex-direction: column; border-bottom: 1px solid #333; position: relative; overflow: hidden;">
+                <div style="display: flex; flex-direction: column; border-bottom: 1px solid #333; position: relative;">
                     <div style="position: absolute; top: 5px; right: 15px; color: #444; font-size: 9px; pointer-events: none; z-index: 10;">TERM 1</div>
                     <div id="terminalLog1" class="terminal-log"></div>
                     <div class="terminal-input-bar">
@@ -733,7 +747,7 @@
                     </div>
                 </div>
                 <!-- Term 2 -->
-                <div style="flex: 1; display: flex; flex-direction: column; position: relative; overflow: hidden;">
+                <div style="display: flex; flex-direction: column; position: relative;">
                     <div style="position: absolute; top: 5px; right: 15px; color: #444; font-size: 9px; pointer-events: none; z-index: 10;">TERM 2</div>
                     <div id="terminalLog2" class="terminal-log"></div>
                     <div class="terminal-input-bar">
@@ -746,7 +760,7 @@
             </div>
         </div>
         
-        <div id="gitHistoryView" style="display:none; height:100%; padding: 0;">
+        <div id="gitHistoryView">
              <div class="explorer-path-bar" style="justify-content: space-between;">
                 <div style="display:flex; gap:8px; align-items:center;">
                     <span style="font-weight:bold; color:#ccc;">SOURCE CONTROL GRAPH</span>
@@ -758,7 +772,7 @@
                     <button onclick="pushChanges()" style="background:#2563eb">Push</button>
                 </div>
             </div>
-            <div id="gitGraphContainer" style="height: calc(100% - 50px); overflow-y: auto; padding: 10px;">
+            <div id="gitGraphContainer" style="padding: 10px;">
                 <div class="loading">Loading git history...</div>
             </div>
         </div>
@@ -984,7 +998,7 @@
             currentCascadeId = 'EXPLORER_VIEW';
             document.getElementById('chatContent').style.display = 'none';
             document.getElementById('diffView').style.display = 'none';
-            document.getElementById('explorerView').style.display = 'block';
+            document.getElementById('explorerView').style.display = 'flex';
             document.getElementById('gitHistoryView').style.display = 'none';
             document.getElementById('terminalView').style.display = 'none';
             document.querySelector('.input-section').style.display = 'none';
@@ -1006,7 +1020,7 @@
 
             currentCascadeId = 'DIFF_VIEW';
             document.getElementById('chatContent').style.display = 'none';
-            document.getElementById('diffView').style.display = 'block';
+            document.getElementById('diffView').style.display = 'flex';
             document.getElementById('explorerView').style.display = 'none';
             document.getElementById('gitHistoryView').style.display = 'none';
             document.getElementById('terminalView').style.display = 'none';
@@ -1028,7 +1042,7 @@
             document.getElementById('chatContent').style.display = 'none';
             document.getElementById('diffView').style.display = 'none';
             document.getElementById('explorerView').style.display = 'none';
-            document.getElementById('gitHistoryView').style.display = 'block';
+            document.getElementById('gitHistoryView').style.display = 'flex';
             document.getElementById('terminalView').style.display = 'none';
             document.querySelector('.input-section').style.display = 'none';
             renderTabs();
