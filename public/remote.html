@@ -39,7 +39,6 @@
         }
         .btn.active { background: #28a745; border-color: #218838; font-weight: bold; }
 
-        /* Larger width for the Drag button */
         .btn-drag { flex: 0 0 50px; }
 
         .btn-mini {
@@ -67,32 +66,24 @@
 
         .update-time { color: #0f0; }
 
-        /* Auth Modal Styling */
-        #auth-overlay {
-            position: fixed; inset: 0; background: rgba(0,0,0,0.9);
-            z-index: 1000; display: none; flex-direction: column;
-            align-items: center; justify-content: center;
-        }
-        #auth-modal {
-            background: #222; padding: 20px; border-radius: 8px;
-            border: 1px solid #444; width: 280px; text-align: center;
-        }
-        #auth-modal input {
-            width: 100%; padding: 10px; margin: 15px 0;
-            background: #000; border: 1px solid #444; color: white; border-radius: 4px;
-        }
-        #auth-modal button {
-            width: 100%; padding: 10px; background: #007bff;
-            border: none; color: white; border-radius: 4px; font-weight: bold;
+        /* Virtual Cursor - CENTERED on target pixel */
+        /* Virtual Cursor */
+        #virtual-cursor {
+            position: absolute;
+            pointer-events: none;
+            z-index: 100;
+            display: none;
+            /* Hotspot adjustment: The tip (48,48) in a 256x256 viewbox is at 18.75% */
+            transform: translate(-18.75%, -18.75%);
         }
     </style>
 </head>
 <body>
-    <div id="auth-overlay">
-        <div id="auth-modal">
+    <div id="auth-overlay" style="position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 1000; display: none; flex-direction: column; align-items: center; justify-content: center;">
+        <div style="background: #222; padding: 20px; border-radius: 8px; border: 1px solid #444; width: 280px; text-align: center;">
             <div style="font-weight:bold; margin-bottom:10px">Access Required</div>
-            <input type="password" id="pin-input" placeholder="Enter PIN">
-            <button id="btn-login">Connect</button>
+            <input type="password" id="pin-input" placeholder="Enter PIN" style="width: 100%; padding: 10px; margin: 15px 0; background: #000; border: 1px solid #444; color: white; border-radius: 4px;">
+            <button id="btn-login" style="width: 100%; padding: 10px; background: #007bff; border: none; color: white; border-radius: 4px; font-weight: bold;">Connect</button>
         </div>
     </div>
 
@@ -104,6 +95,7 @@
                 <a data-ms="1000">1s</a>
                 <a data-ms="2000">2s</a>
                 <a data-ms="4000">4s</a>
+                <a data-ms="10000">10s</a>
                 <a id="link-stop">stop</a>
                 <a id="link-fetch" style="display:none">fetch</a>
             </div>
@@ -125,6 +117,14 @@
 
     <div id="viewport">
         <div id="screen-wrapper">
+            <div id="virtual-cursor">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 256 256">
+                    <!-- White Fill Inner -->
+                    <path fill="white" d="M195.31,208,144,156.69a16,16,0,0,0-26,4.93c0,.11-.09.22-.13.32l-17.65,46L48,48l159.85,52.2-45.95,17.64-.32.13a16,16,0,0,0-4.93,26h0L208,195.31Z"></path>
+                    <!-- Black Outline -->
+                    <path fill="black" d="M168,132.69,214.08,115l.33-.13A16,16,0,0,0,213,85.07L52.92,32.8A15.95,15.95,0,0,0,32.8,52.92L85.07,213a15.82,15.82,0,0,0,14.41,11l.78,0a15.84,15.84,0,0,0,14.61-9.59l.13-.33L132.69,168,184,219.31a16,16,0,0,0,22.63,0l12.68-12.68a16,16,0,0,0,0-22.63ZM195.31,208,144,156.69a16,16,0,0,0-26,4.93c0,.11-.09.22-.13.32l-17.65,46L48,48l159.85,52.2-45.95,17.64-.32.13a16,16,0,0,0-4.93,26h0L208,195.31Z"></path>
+                </svg>
+            </div>
             <img id="screen" src="" alt="Desktop Snapshot">
         </div>
     </div>
@@ -136,8 +136,9 @@
         const resInfo = document.getElementById('res-info');
         const timeAgoLabel = document.getElementById('time-ago');
         const textInput = document.getElementById('text-input');
+        const virtualCursor = document.getElementById('virtual-cursor');
         
-        let screenWidth = 1920, screenHeight = 1080;
+        let screenWidth = 2560, screenHeight = 1440;
         let lastUpdateTimestamp = Date.now();
         let clickMode = 'left';
         let refreshInterval = 500;
@@ -145,34 +146,25 @@
         let isStopped = false;
         let refreshTimeout = null;
 
-        // --- AUTH LOGIC ---
         async function checkAuth() {
             try {
                 const r = await fetch('/api/auth-config');
                 const config = await r.json();
-                
-                if (config.required) {
-                    if (!accessToken) {
-                        const pin = window.prompt("Enter Access PIN:");
-                        if (pin) {
-                            accessToken = pin;
-                            localStorage.setItem('remote_token', pin);
-                            init();
-                        } else {
-                            location.reload();
-                        }
-                    } else {
-                        init();
-                    }
-                } else {
-                    accessToken = '';
-                    init();
-                }
-            } catch (e) { 
-                console.error("Auth check failed", e); 
-                setTimeout(checkAuth, 2000);
-            }
+                if (config.required && !accessToken) {
+                    document.getElementById('auth-overlay').style.display = 'flex';
+                } else { init(); }
+            } catch (e) { setTimeout(checkAuth, 2000); }
         }
+
+        document.getElementById('btn-login').onclick = () => {
+            const pin = document.getElementById('pin-input').value;
+            if (pin) {
+                accessToken = pin;
+                localStorage.setItem('remote_token', pin);
+                document.getElementById('auth-overlay').style.display = 'none';
+                init();
+            }
+        };
 
         const apiFetch = (url, options = {}) => {
             if (accessToken) {
@@ -181,7 +173,6 @@
             return fetch(url, options);
         };
 
-        // --- TRANSFORMATION LOGIC ---
         let scale = 1, posX = 0, posY = 0;
         let refScale = 1, refPosX = 0, refPosY = 0;
         let refMidpoint = { x: 0, y: 0 }, refPinchDist = 0, refSingleFinger = { x: 0, y: 0 };
@@ -189,11 +180,6 @@
         function updateTransform() {
             wrapper.style.transform = `translate3d(${posX}px, ${posY}px, 0) scale(${scale})`;
         }
-
-        const getMidpoint = (t1, t2) => ({
-            x: (t1.clientX + t2.clientX) / 2,
-            y: (t1.clientY + t2.clientY) / 2
-        });
 
         const getDist = (t1, t2) => Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
 
@@ -203,7 +189,7 @@
                 refSingleFinger.x = touches[0].clientX; refSingleFinger.y = touches[0].clientY;
             } else if (touches.length === 2) {
                 refPinchDist = getDist(touches[0], touches[1]);
-                refMidpoint = getMidpoint(touches[0], touches[1]);
+                refMidpoint = { x: (touches[0].clientX + touches[1].clientX) / 2, y: (touches[0].clientY + touches[1].clientY) / 2 };
             }
         }
 
@@ -212,11 +198,7 @@
                 const rect = img.getBoundingClientRect();
                 const x = (e.touches[0].clientX - rect.left) / (rect.width / screenWidth);
                 const y = (e.touches[0].clientY - rect.top) / (rect.height / screenHeight);
-                apiFetch('/api/click', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ x, y, button: 'left', action: 'down' })
-                });
+                apiFetch('/api/click', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ x, y, button: 'left', action: 'down' }) });
                 return;
             }
             syncReferences(e.touches);
@@ -225,16 +207,9 @@
         viewport.addEventListener('touchend', (e) => {
             if (clickMode === 'drag') {
                 const rect = img.getBoundingClientRect();
-                // For touchend, use changedTouches
-                const clientX = e.changedTouches[0].clientX;
-                const clientY = e.changedTouches[0].clientY;
-                const x = (clientX - rect.left) / (rect.width / screenWidth);
-                const y = (clientY - rect.top) / (rect.height / screenHeight);
-                apiFetch('/api/click', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ x, y, button: 'left', action: 'up' })
-                });
+                const x = (e.changedTouches[0].clientX - rect.left) / (rect.width / screenWidth);
+                const y = (e.changedTouches[0].clientY - rect.top) / (rect.height / screenHeight);
+                apiFetch('/api/click', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ x, y, button: 'left', action: 'up' }) });
                 return;
             }
             syncReferences(e.touches);
@@ -242,18 +217,14 @@
 
         viewport.addEventListener('touchmove', (e) => {
             e.preventDefault();
+            const rect = img.getBoundingClientRect();
+            const x = (e.touches[0].clientX - rect.left) / (rect.width / screenWidth);
+            const y = (e.touches[0].clientY - rect.top) / (rect.height / screenHeight);
+
             if (clickMode === 'drag') {
-                const rect = img.getBoundingClientRect();
-                const x = (e.touches[0].clientX - rect.left) / (rect.width / screenWidth);
-                const y = (e.touches[0].clientY - rect.top) / (rect.height / screenHeight);
-                // Throttle drag move slightly to avoid flooding
                 if (!window._lastDragMove || Date.now() - window._lastDragMove > 50) {
                     window._lastDragMove = Date.now();
-                    apiFetch('/api/click', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ x, y, action: 'move' })
-                    });
+                    apiFetch('/api/click', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ x, y, action: 'move' }) });
                 }
                 return;
             }
@@ -263,11 +234,11 @@
                 posY = refPosY + (e.touches[0].clientY - refSingleFinger.y);
             } else if (e.touches.length === 2) {
                 const currentDist = getDist(e.touches[0], e.touches[1]);
-                const currentMidpoint = getMidpoint(e.touches[0], e.touches[1]);
+                const currentMidpoint = { x: (e.touches[0].clientX + e.touches[1].clientX) / 2, y: (e.touches[0].clientY + e.touches[1].clientY) / 2 };
                 const newScale = refScale * (currentDist / refPinchDist);
-                const zoomRatio = newScale / refScale;
-                posX = currentMidpoint.x - (refMidpoint.x - refPosX) * zoomRatio;
-                posY = currentMidpoint.y - (refMidpoint.y - refPosY) * zoomRatio;
+                const ratio = newScale / refScale;
+                posX = currentMidpoint.x - (refMidpoint.x - refPosX) * ratio;
+                posY = currentMidpoint.y - (refMidpoint.y - refPosY) * ratio;
                 scale = Math.min(Math.max(newScale, 0.02), 20);
             }
             updateTransform();
@@ -279,24 +250,6 @@
             updateTransform();
         };
 
-        // --- MOUSE Support ---
-        let isDragging = false;
-        viewport.addEventListener('mousedown', (e) => {
-            if (clickMode === 'drag') return;
-            isDragging = true;
-            refSingleFinger.x = e.clientX; refSingleFinger.y = e.clientY;
-            refPosX = posX; refPosY = posY;
-        });
-        window.addEventListener('mousemove', (e) => {
-            if (isDragging) {
-                posX = refPosX + (e.clientX - refSingleFinger.x);
-                posY = refPosY + (e.clientY - refSingleFinger.y);
-                updateTransform();
-            }
-        });
-        window.addEventListener('mouseup', () => isDragging = false);
-
-        // --- CORE LOGIC ---
         function init() {
             updateInfo();
             refreshFrame();
@@ -305,18 +258,28 @@
         async function updateInfo() {
             try {
                 const r = await apiFetch('/api/info');
-                if (r.status === 401) {
-                    localStorage.removeItem('remote_token');
-                    accessToken = '';
-                    checkAuth();
-                    return;
-                }
+                if (r.status === 401) { location.reload(); return; }
                 const data = await r.json();
                 screenWidth = data.width; screenHeight = data.height;
                 resInfo.innerText = `${screenWidth}x${screenHeight}`;
                 scale = viewport.clientWidth / screenWidth;
                 updateTransform();
-            } catch (e) { console.error(e); }
+            } catch (e) {}
+        }
+
+        async function updateMouse() {
+            if (isStopped) return;
+            try {
+                const r = await apiFetch('/api/mouse');
+                if (r.ok) {
+                    const pos = await r.json();
+                    const ratioX = img.naturalWidth / screenWidth;
+                    const ratioY = img.naturalHeight / screenHeight;
+                    virtualCursor.style.display = 'block';
+                    virtualCursor.style.left = (pos.x * ratioX) + 'px';
+                    virtualCursor.style.top = (pos.y * ratioY) + 'px';
+                }
+            } catch (e) {}
         }
 
         function refreshFrame() {
@@ -329,65 +292,41 @@
                 if (isStopped) return;
                 img.src = nextFrame.src;
                 lastUpdateTimestamp = Date.now();
+                updateMouse();
                 refreshTimeout = setTimeout(refreshFrame, Math.max(50, refreshInterval - (Date.now() - startTime)));
             };
-            nextFrame.onerror = () => {
-                if (isStopped) return;
-                refreshTimeout = setTimeout(refreshFrame, 200);
-            };
+            nextFrame.onerror = () => { if (!isStopped) refreshTimeout = setTimeout(refreshFrame, 200); };
         }
-
-        function fetchSingle() {
-            const startTime = Date.now();
-            const nextFrame = new Image();
-            const tokenParam = accessToken ? `&token=${accessToken}` : '';
-            nextFrame.src = `/api/screenshot?t=${startTime}${tokenParam}`;
-            nextFrame.onload = () => {
-                img.src = nextFrame.src;
-                lastUpdateTimestamp = Date.now();
-            };
-        }
-
-        setInterval(() => {
-            timeAgoLabel.innerText = Math.floor((Date.now() - lastUpdateTimestamp) / 1000);
-        }, 1000);
 
         document.getElementById('interval-controls').onclick = (e) => {
             if (e.target.tagName === 'A') {
                 const target = e.target;
                 if (target.dataset.ms) {
-                    const wasStopped = isStopped;
                     isStopped = false;
                     refreshInterval = parseInt(target.dataset.ms);
                     document.querySelectorAll('#interval-controls a').forEach(a => a.classList.remove('active'));
                     target.classList.add('active');
                     document.getElementById('link-stop').style.display = 'inline';
                     document.getElementById('link-fetch').style.display = 'none';
-                    if (wasStopped) refreshFrame();
+                    refreshFrame();
                 } else if (target.id === 'link-stop') {
-                    isStopped = true;
-                    clearTimeout(refreshTimeout);
+                    isStopped = true; clearTimeout(refreshTimeout);
                     document.querySelectorAll('#interval-controls a').forEach(a => a.classList.remove('active'));
                     target.style.display = 'none';
                     document.getElementById('link-fetch').style.display = 'inline';
                 } else if (target.id === 'link-fetch') {
-                    fetchSingle();
+                    const nextFrame = new Image();
+                    const tokenParam = accessToken ? `&token=${accessToken}` : '';
+                    nextFrame.src = `/api/screenshot?t=${Date.now()}${tokenParam}`;
+                    nextFrame.onload = () => { img.src = nextFrame.src; lastUpdateTimestamp = Date.now(); updateMouse(); };
                 }
             }
         };
 
         const setMode = (mode) => {
-            // Toggle logic: if clicking active L or R, deactivate
-            if ((mode === 'left' || mode === 'right') && clickMode === mode) {
-                clickMode = 'none';
-            } else {
-                clickMode = mode;
-            }
-
-            document.querySelectorAll('.controls-main .btn').forEach(b => {
-                if(b.id !== 'btn-send') b.classList.remove('active');
-            });
-
+            if ((mode === 'left' || mode === 'right') && clickMode === mode) { clickMode = 'none'; } 
+            else { clickMode = mode; }
+            document.querySelectorAll('.controls-main .btn').forEach(b => { if(b.id !== 'btn-send') b.classList.remove('active'); });
             if (clickMode !== 'none') {
                 const activeBtn = document.getElementById('btn-' + clickMode);
                 if (activeBtn) activeBtn.classList.add('active');
@@ -398,34 +337,30 @@
         document.getElementById('btn-right').onclick = () => setMode('right');
         document.getElementById('btn-drag').onclick = () => setMode('drag');
 
-        const sendText = () => {
+        document.getElementById('btn-send').onclick = () => {
             const text = textInput.value;
             if (!text) return;
-            apiFetch('/api/type', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ text })
-            }).then(() => { textInput.value = ''; });
+            apiFetch('/api/type', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) })
+            .then(() => { textInput.value = ''; });
         };
-        document.getElementById('btn-send').onclick = sendText;
-        textInput.onkeypress = (e) => { if(e.key === 'Enter') sendText(); };
 
         let touchStartTS = 0;
-        img.addEventListener('touchstart', () => touchStartTS = Date.now());
-        img.addEventListener('click', (e) => {
+        let lastTouchPos = { x: 0, y: 0 };
+        img.addEventListener('touchstart', (e) => { touchStartTS = Date.now(); lastTouchPos = { x: e.touches[0].clientX, y: e.touches[0].clientY }; });
+        img.addEventListener('touchend', (e) => {
             if (clickMode === 'none' || clickMode === 'drag') return;
-            if (Date.now() - touchStartTS > 250) return;
-            const rect = img.getBoundingClientRect();
-            const x = (e.clientX - rect.left) / (rect.width / screenWidth);
-            const y = (e.clientY - rect.top) / (rect.height / screenHeight);
-            apiFetch('/api/click', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ x, y, button: clickMode })
-            });
+            const duration = Date.now() - touchStartTS;
+            const moveDist = Math.hypot(e.changedTouches[0].clientX - lastTouchPos.x, e.changedTouches[0].clientY - lastTouchPos.y);
+            if (duration < 300 && moveDist < 10) {
+                const rect = img.getBoundingClientRect();
+                const x = (e.changedTouches[0].clientX - rect.left) / (rect.width / screenWidth);
+                const y = (e.changedTouches[0].clientY - rect.top) / (rect.height / screenHeight);
+                apiFetch('/api/click', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ x, y, button: clickMode }) });
+            }
         });
-        img.addEventListener('contextmenu', e => e.preventDefault());
 
+        setInterval(() => { timeAgoLabel.innerText = Math.floor((Date.now() - lastUpdateTimestamp) / 1000); }, 1000);
+        img.addEventListener('contextmenu', e => e.preventDefault());
         checkAuth();
     </script>
 </body>

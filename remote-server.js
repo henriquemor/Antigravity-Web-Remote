@@ -14,7 +14,6 @@ const startServer = () => {
     app.use(express.json());
     app.use(express.static('public'));
 
-    // Middleware to check authentication
     const auth = (req, res, next) => {
         if (!ACCESS_TOKEN) return next();
         const token = req.headers['x-auth-token'] || req.query.token;
@@ -25,7 +24,6 @@ const startServer = () => {
         }
     };
 
-    // Public endpoint to check if password is required
     app.get('/api/auth-config', (req, res) => {
         res.json({ required: !!ACCESS_TOKEN });
     });
@@ -34,6 +32,15 @@ const startServer = () => {
         try {
             const size = robot.getScreenSize();
             res.json(size);
+        } catch (err) {
+            res.status(500).json({ error: err.message });
+        }
+    });
+
+    app.get('/api/mouse', auth, (req, res) => {
+        try {
+            const pos = robot.getMousePos();
+            res.json(pos);
         } catch (err) {
             res.status(500).json({ error: err.message });
         }
@@ -88,11 +95,9 @@ const startServer = () => {
                 robot.moveMouse(targetX, targetY);
                 robot.mouseToggle('up', button || 'left');
             } else {
-                // Default click
                 robot.moveMouse(targetX, targetY);
                 robot.mouseClick(button || 'left');
             }
-            
             res.json({ success: true });
         } catch (err) {
             res.status(500).json({ error: err.message });
