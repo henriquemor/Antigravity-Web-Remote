@@ -1,126 +1,68 @@
 <!DOCTYPE html>
-<html lang="pt-br">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Remote Mobile</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Remote Control</title>
     <style>
         * { box-sizing: border-box; }
         body { 
-            margin: 0; 
-            padding: 0; 
-            background: #031f13; 
-            display: flex; 
-            flex-direction: column;
-            min-height: 100vh; 
+            margin: 0; padding: 0; background: #000; 
+            display: flex; flex-direction: column; height: 100vh; 
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            color: white;
+            color: white; overflow: hidden;
         }
 
         /* Top Bar */
         .header {
-            background: #1a1a1a;
-            padding: 8px;
-            display: flex;
-            flex-direction: column;
-            gap: 6px;
-            position: sticky;
-            top: 0;
-            z-index: 110;
-            border-bottom: 1px solid #333;
+            background: #1a1a1a; padding: 8px;
+            display: flex; flex-direction: column; gap: 6px;
+            z-index: 200; border-bottom: 1px solid #333;
         }
 
         .status-row {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            font-size: 10px;
-            font-family: monospace;
-            color: #888;
+            display: flex; justify-content: space-between; align-items: center;
+            font-size: 10px; font-family: monospace; color: #888;
         }
 
-        .interval-links {
-            display: flex;
-            gap: 6px;
-        }
+        .status-right { display: flex; align-items: center; gap: 8px; }
 
-        .interval-links a {
-            color: #007bff;
-            text-decoration: none;
-            cursor: pointer;
-        }
+        .interval-links a { color: #007bff; text-decoration: none; cursor: pointer; margin-right: 5px; }
+        .interval-links a.active { color: #0f0; font-weight: bold; }
 
-        .interval-links a.active {
-            color: #0f0;
-            font-weight: bold;
-            text-decoration: underline;
-        }
+        .controls-main { display: flex; gap: 4px; align-items: center; }
 
-        .controls-main {
-            display: flex;
-            gap: 4px;
-            align-items: center;
-        }
-
-        /* Buttons & Inputs */
         .btn {
-            background: #333;
-            border: 1px solid #444;
-            color: white;
-            padding: 8px 2px;
-            cursor: pointer;
-            border-radius: 4px;
-            font-size: 12px;
-            text-align: center;
-            flex: 0 0 35px;
-            -webkit-tap-highlight-color: transparent;
+            background: #333; border: 1px solid #444; color: white; padding: 8px 2px;
+            cursor: pointer; border-radius: 4px; font-size: 12px; text-align: center;
+            flex: 0 0 35px; -webkit-tap-highlight-color: transparent;
         }
+        .btn.active { background: #28a745; border-color: #218838; font-weight: bold; }
 
-        .btn.active {
-            background: #28a745;
-            border-color: #218838;
-            font-weight: bold;
+        .btn-mini {
+            padding: 2px 6px; font-size: 10px; flex: 0 0 auto; background: #444; color: #ccc;
         }
 
         input[type="text"] {
-            flex: 1;
-            padding: 8px;
-            border-radius: 4px;
-            border: 1px solid #444;
-            background: #111;
-            color: white;
-            font-size: 14px;
-            min-width: 0;
+            flex: 1; padding: 8px; border-radius: 4px; border: 1px solid #444;
+            background: #111; color: white; font-size: 14px; min-width: 0;
         }
 
-        #btn-send {
-            flex: 0 0 40px;
-            background: #28a745;
-            border-color: #218838;
+        #btn-send { flex: 0 0 40px; background: #28a745; border-color: #218838; }
+
+        #viewport {
+            flex: 1; position: relative; overflow: hidden;
+            background: #000; touch-action: none;
         }
 
-        /* Screen Area */
-        #screen-container {
-            position: relative;
-            flex: 1;
-            display: flex;
-            justify-content: center;
-            align-items: flex-start;
-            background: #042316;
-            padding: 10px 0;
-            padding-bottom: 300px;
-            padding-top: 300px;
+        #screen-wrapper {
+            position: absolute; transform-origin: 0 0;
+            display: inline-block; will-change: transform;
         }
 
-        #screen { 
-            max-width: 100%; 
-            height: auto;
-            display: block;
-        }
+        #screen { display: block; width: auto; height: auto; }
 
-        .update-time {
-            color: #0f0;
-        }
+        .update-time { color: #0f0; }
     </style>
 </head>
 <body>
@@ -131,62 +73,139 @@
                 <a data-ms="500" class="active">500ms</a>
                 <a data-ms="1000">1s</a>
                 <a data-ms="2000">2s</a>
-                <a data-ms="4000">4s</a>
             </div>
-            <div><span id="res-info">...</span> | <span id="time-ago" class="update-time">0</span>s</div>
+            <div class="status-right">
+                <span id="res-info">Loading...</span>
+                <button class="btn btn-mini" id="btn-reset">reset</button>
+                <span id="time-ago" class="update-time">0</span>s ago
+            </div>
         </div>
         
         <div class="controls-main">
-            <button class="btn active" id="btn-left" title="Esquerdo">L</button>
-            <button class="btn" id="btn-right" title="Direito">R</button>
-            <button class="btn" id="btn-none" title="Desativar">X</button>
-            <input type="text" id="text-input" placeholder="Texto...">
-            <button class="btn" id="btn-send">OK</button>
+            <button class="btn active" id="btn-left">L</button>
+            <button class="btn" id="btn-right">R</button>
+            <button class="btn" id="btn-none">X</button>
+            <input type="text" id="text-input" placeholder="Type text...">
+            <button class="btn" id="btn-send">send</button>
         </div>
     </div>
 
-    <div id="screen-container">
-        <img id="screen" src="/api/screenshot" alt="Desktop Snapshot">
+    <div id="viewport">
+        <div id="screen-wrapper">
+            <img id="screen" src="/api/screenshot" alt="Desktop Snapshot">
+        </div>
     </div>
 
     <script>
         const img = document.getElementById('screen');
+        const wrapper = document.getElementById('screen-wrapper');
+        const viewport = document.getElementById('viewport');
         const resInfo = document.getElementById('res-info');
         const timeAgoLabel = document.getElementById('time-ago');
         const textInput = document.getElementById('text-input');
         
-        let screenWidth = 1920; 
-        let screenHeight = 1080;
+        let screenWidth = 1920, screenHeight = 1080;
         let lastUpdateTimestamp = Date.now();
         let clickMode = 'left';
         let refreshInterval = 500;
 
-        // Timer de segundos desde a última atualização
-        setInterval(() => {
-            const seconds = Math.floor((Date.now() - lastUpdateTimestamp) / 1000);
-            timeAgoLabel.innerText = seconds;
-        }, 1000);
+        // --- Current State ---
+        let scale = 1, posX = 0, posY = 0;
+        
+        // --- Reference State ---
+        let refScale = 1, refPosX = 0, refPosY = 0;
+        let refMidpoint = { x: 0, y: 0 };
+        let refPinchDist = 0;
+        let refSingleFinger = { x: 0, y: 0 };
 
-        // Seleção de Intervalo
-        document.getElementById('interval-controls').addEventListener('click', (e) => {
-            if (e.target.tagName === 'A') {
-                refreshInterval = parseInt(e.target.getAttribute('data-ms'));
-                document.querySelectorAll('#interval-controls a').forEach(a => a.classList.remove('active'));
-                e.target.classList.add('active');
-                console.log("Novo intervalo:", refreshInterval);
+        function updateTransform() {
+            wrapper.style.transform = `translate3d(${posX}px, ${posY}px, 0) scale(${scale})`;
+        }
+
+        const getMidpoint = (t1, t2) => ({
+            x: (t1.clientX + t2.clientX) / 2,
+            y: (t1.clientY + t2.clientY) / 2
+        });
+
+        const getDist = (t1, t2) => Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
+
+        function syncReferences(touches) {
+            refScale = scale;
+            refPosX = posX;
+            refPosY = posY;
+
+            if (touches.length === 1) {
+                refSingleFinger.x = touches[0].clientX;
+                refSingleFinger.y = touches[0].clientY;
+            } else if (touches.length === 2) {
+                refPinchDist = getDist(touches[0], touches[1]);
+                refMidpoint = getMidpoint(touches[0], touches[1]);
+            }
+        }
+
+        viewport.addEventListener('touchstart', (e) => syncReferences(e.touches), {passive: false});
+        viewport.addEventListener('touchend', (e) => syncReferences(e.touches), {passive: false});
+
+        viewport.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            if (e.touches.length === 1) {
+                posX = refPosX + (e.touches[0].clientX - refSingleFinger.x);
+                posY = refPosY + (e.touches[0].clientY - refSingleFinger.y);
+            } else if (e.touches.length === 2) {
+                const currentDist = getDist(e.touches[0], e.touches[1]);
+                const currentMidpoint = getMidpoint(e.touches[0], e.touches[1]);
+                const newScale = refScale * (currentDist / refPinchDist);
+                const zoomRatio = newScale / refScale;
+                
+                posX = currentMidpoint.x - (refMidpoint.x - refPosX) * zoomRatio;
+                posY = currentMidpoint.y - (refMidpoint.y - refPosY) * zoomRatio;
+                scale = Math.min(Math.max(newScale, 0.02), 20);
+            }
+            updateTransform();
+        }, {passive: false});
+
+        document.getElementById('btn-reset').onclick = () => {
+            scale = viewport.clientWidth / screenWidth;
+            posX = 0; posY = 0;
+            updateTransform();
+        };
+
+        // --- Mouse ---
+        let isDragging = false;
+        viewport.addEventListener('mousedown', (e) => {
+            isDragging = true;
+            refSingleFinger.x = e.clientX; refSingleFinger.y = e.clientY;
+            refPosX = posX; refPosY = posY;
+        });
+        window.addEventListener('mousemove', (e) => {
+            if (isDragging) {
+                posX = refPosX + (e.clientX - refSingleFinger.x);
+                posY = refPosY + (e.clientY - refSingleFinger.y);
+                updateTransform();
             }
         });
+        window.addEventListener('mouseup', () => isDragging = false);
+
+        // --- Interface Logic ---
+        setInterval(() => {
+            timeAgoLabel.innerText = Math.floor((Date.now() - lastUpdateTimestamp) / 1000);
+        }, 1000);
+
+        document.getElementById('interval-controls').onclick = (e) => {
+            if (e.target.tagName === 'A') {
+                refreshInterval = parseInt(e.target.dataset.ms);
+                document.querySelectorAll('#interval-controls a').forEach(a => a.classList.remove('active'));
+                e.target.classList.add('active');
+            }
+        };
 
         const setMode = (mode) => {
             clickMode = mode;
             document.querySelectorAll('.controls-main .btn').forEach(b => {
                 if(b.id !== 'btn-send') b.classList.remove('active');
             });
-            if (mode === 'left') document.getElementById('btn-left').classList.add('active');
-            if (mode === 'right') document.getElementById('btn-right').classList.add('active');
-            if (mode === 'none') document.getElementById('btn-none').classList.add('active');
+            document.getElementById('btn-' + mode).classList.add('active');
         };
-
         document.getElementById('btn-left').onclick = () => setMode('left');
         document.getElementById('btn-right').onclick = () => setMode('right');
         document.getElementById('btn-none').onclick = () => setMode('none');
@@ -200,7 +219,6 @@
                 body: JSON.stringify({ text })
             }).then(() => { textInput.value = ''; });
         };
-
         document.getElementById('btn-send').onclick = sendText;
         textInput.onkeypress = (e) => { if(e.key === 'Enter') sendText(); };
 
@@ -208,10 +226,11 @@
             try {
                 const r = await fetch('/api/info');
                 const data = await r.json();
-                screenWidth = data.width;
-                screenHeight = data.height;
+                screenWidth = data.width; screenHeight = data.height;
                 resInfo.innerText = `${screenWidth}x${screenHeight}`;
-            } catch (e) { resInfo.innerText = "Erro"; }
+                scale = viewport.clientWidth / screenWidth;
+                updateTransform();
+            } catch (e) { resInfo.innerText = "Error"; }
         }
         updateInfo();
 
@@ -219,59 +238,32 @@
             const startTime = Date.now();
             const nextFrame = new Image();
             nextFrame.src = `/api/screenshot?t=${startTime}`;
-
             nextFrame.onload = () => {
                 img.src = nextFrame.src;
                 lastUpdateTimestamp = Date.now();
-                
-                const elapsed = Date.now() - startTime;
-                const nextWait = Math.max(50, refreshInterval - elapsed);
-                
-                setTimeout(refreshFrame, nextWait);
+                setTimeout(refreshFrame, Math.max(50, refreshInterval - (Date.now() - startTime)));
             };
-
-            nextFrame.onerror = () => {
-                setTimeout(refreshFrame, 200);
-            };
+            nextFrame.onerror = () => setTimeout(refreshFrame, 200);
         }
         refreshFrame();
 
-        // Unifica clique para mobile e desktop para evitar duplicidade
-        let lastClickTime = 0;
-        const handleInteraction = (e) => {
+        // Click Logic
+        let touchStartTS = 0;
+        img.addEventListener('touchstart', () => touchStartTS = Date.now());
+        img.addEventListener('click', (e) => {
             if (clickMode === 'none') return;
-
-            // Debounce de 200ms para evitar disparos duplos (touchstart + mousedown)
-            const now = Date.now();
-            if (now - lastClickTime < 200) return;
-            lastClickTime = now;
+            if (Date.now() - touchStartTS > 250) return;
 
             const rect = img.getBoundingClientRect();
-            // Pega coordenadas corretamente independente do evento
-            const clientX = (e.touches && e.touches[0]) ? e.touches[0].clientX : e.clientX;
-            const clientY = (e.touches && e.touches[0]) ? e.touches[0].clientY : e.clientY;
-
-            // Se o clique foi fora da imagem real (devido ao padding/container), ignora
-            if (clientX < rect.left || clientX > rect.right || clientY < rect.top || clientY > rect.bottom) return;
-
-            const xRatio = (clientX - rect.left) / rect.width;
-            const yRatio = (clientY - rect.top) / rect.height;
-
-            const realX = Math.round(xRatio * screenWidth);
-            const realY = Math.round(yRatio * screenHeight);
-
+            const x = (e.clientX - rect.left) / (rect.width / screenWidth);
+            const y = (e.clientY - rect.top) / (rect.height / screenHeight);
             fetch('/api/click', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ x: realX, y: realY, button: clickMode })
+                body: JSON.stringify({ x, y, button: clickMode })
             });
-        };
-
-        // Adiciona os listeners de forma limpa
-        img.addEventListener('touchstart', handleInteraction, { passive: true });
-        img.addEventListener('mousedown', handleInteraction);
+        });
         img.addEventListener('contextmenu', e => e.preventDefault());
-
     </script>
 </body>
 </html>
