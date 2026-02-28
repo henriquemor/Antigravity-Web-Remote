@@ -92,7 +92,7 @@
 
     <div id="viewport">
         <div id="screen-wrapper">
-            <img id="screen" src="/api/screenshot" alt="Desktop Snapshot">
+            <img id="screen" src="" alt="Desktop Snapshot">
         </div>
     </div>
 
@@ -108,15 +108,50 @@
         let lastUpdateTimestamp = Date.now();
         let clickMode = 'left';
         let refreshInterval = 500;
+        let accessToken = localStorage.getItem('remote_token') || '';
 
-        // --- Current State ---
+        // --- AUTH LOGIC ---
+        async function checkAuth() {
+            try {
+                const r = await fetch('/api/auth-config');
+                const config = await r.json();
+                
+                if (config.required) {
+                    if (!accessToken) {
+                        const pin = window.prompt("Enter Access PIN:");
+                        if (pin) {
+                            accessToken = pin;
+                            localStorage.setItem('remote_token', pin);
+                            init();
+                        } else {
+                            // If cancelled, keep checking or show error
+                            location.reload();
+                        }
+                    } else {
+                        init();
+                    }
+                } else {
+                    accessToken = '';
+                    init();
+                }
+            } catch (e) { 
+                console.error("Auth check failed", e); 
+                // Retry in case of network glitch
+                setTimeout(checkAuth, 2000);
+            }
+        }
+
+        const apiFetch = (url, options = {}) => {
+            if (accessToken) {
+                options.headers = { ...options.headers, 'x-auth-token': accessToken };
+            }
+            return fetch(url, options);
+        };
+
+        // --- TRANSFORMATION LOGIC ---
         let scale = 1, posX = 0, posY = 0;
-        
-        // --- Reference State ---
         let refScale = 1, refPosX = 0, refPosY = 0;
-        let refMidpoint = { x: 0, y: 0 };
-        let refPinchDist = 0;
-        let refSingleFinger = { x: 0, y: 0 };
+        let refMidpoint = { x: 0, y: 0 }, refPinchDist = 0, refSingleFinger = { x: 0, y: 0 };
 
         function updateTransform() {
             wrapper.style.transform = `translate3d(${posX}px, ${posY}px, 0) scale(${scale})`;
@@ -130,13 +165,9 @@
         const getDist = (t1, t2) => Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
 
         function syncReferences(touches) {
-            refScale = scale;
-            refPosX = posX;
-            refPosY = posY;
-
+            refScale = scale; refPosX = posX; refPosY = posY;
             if (touches.length === 1) {
-                refSingleFinger.x = touches[0].clientX;
-                refSingleFinger.y = touches[0].clientY;
+                refSingleFinger.x = touches[0].clientX; refSingleFinger.y = touches[0].clientY;
             } else if (touches.length === 2) {
                 refPinchDist = getDist(touches[0], touches[1]);
                 refMidpoint = getMidpoint(touches[0], touches[1]);
@@ -145,7 +176,6 @@
 
         viewport.addEventListener('touchstart', (e) => syncReferences(e.touches), {passive: false});
         viewport.addEventListener('touchend', (e) => syncReferences(e.touches), {passive: false});
-
         viewport.addEventListener('touchmove', (e) => {
             e.preventDefault();
             if (e.touches.length === 1) {
@@ -156,7 +186,6 @@
                 const currentMidpoint = getMidpoint(e.touches[0], e.touches[1]);
                 const newScale = refScale * (currentDist / refPinchDist);
                 const zoomRatio = newScale / refScale;
-                
                 posX = currentMidpoint.x - (refMidpoint.x - refPosX) * zoomRatio;
                 posY = currentMidpoint.y - (refMidpoint.y - refPosY) * zoomRatio;
                 scale = Math.min(Math.max(newScale, 0.02), 20);
@@ -170,7 +199,7 @@
             updateTransform();
         };
 
-        // --- Mouse ---
+        // --- MOUSE Support ---
         let isDragging = false;
         viewport.addEventListener('mousedown', (e) => {
             isDragging = true;
@@ -186,7 +215,45 @@
         });
         window.addEventListener('mouseup', () => isDragging = false);
 
-        // --- Interface Logic ---
+        // --- CORE LOGIC ---
+        function init() {
+            updateInfo();
+            refreshFrame();
+        }
+
+        async function updateInfo() {
+            try {
+                const r = await apiFetch('/api/info');
+                if (r.status === 401) {
+                    localStorage.removeItem('remote_token');
+                    accessToken = '';
+                    checkAuth();
+                    return;
+                }
+                const data = await r.json();
+                screenWidth = data.width; screenHeight = data.height;
+                resInfo.innerText = `${screenWidth}x${screenHeight}`;
+                scale = viewport.clientWidth / screenWidth;
+                updateTransform();
+            } catch (e) { console.error(e); }
+        }
+
+        function refreshFrame() {
+            const startTime = Date.now();
+            const nextFrame = new Image();
+            const tokenParam = accessToken ? `&token=${accessToken}` : '';
+            nextFrame.src = `/api/screenshot?t=${startTime}${tokenParam}`;
+            nextFrame.onload = () => {
+                img.src = nextFrame.src;
+                lastUpdateTimestamp = Date.now();
+                setTimeout(refreshFrame, Math.max(50, refreshInterval - (Date.now() - startTime)));
+            };
+            nextFrame.onerror = () => {
+                // If it fails due to auth, stop refreshing and re-check auth
+                setTimeout(refreshFrame, 500);
+            };
+        }
+
         setInterval(() => {
             timeAgoLabel.innerText = Math.floor((Date.now() - lastUpdateTimestamp) / 1000);
         }, 1000);
@@ -213,7 +280,7 @@
         const sendText = () => {
             const text = textInput.value;
             if (!text) return;
-            fetch('/api/type', {
+            apiFetch('/api/type', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ text })
@@ -222,48 +289,23 @@
         document.getElementById('btn-send').onclick = sendText;
         textInput.onkeypress = (e) => { if(e.key === 'Enter') sendText(); };
 
-        async function updateInfo() {
-            try {
-                const r = await fetch('/api/info');
-                const data = await r.json();
-                screenWidth = data.width; screenHeight = data.height;
-                resInfo.innerText = `${screenWidth}x${screenHeight}`;
-                scale = viewport.clientWidth / screenWidth;
-                updateTransform();
-            } catch (e) { resInfo.innerText = "Error"; }
-        }
-        updateInfo();
-
-        function refreshFrame() {
-            const startTime = Date.now();
-            const nextFrame = new Image();
-            nextFrame.src = `/api/screenshot?t=${startTime}`;
-            nextFrame.onload = () => {
-                img.src = nextFrame.src;
-                lastUpdateTimestamp = Date.now();
-                setTimeout(refreshFrame, Math.max(50, refreshInterval - (Date.now() - startTime)));
-            };
-            nextFrame.onerror = () => setTimeout(refreshFrame, 200);
-        }
-        refreshFrame();
-
-        // Click Logic
         let touchStartTS = 0;
         img.addEventListener('touchstart', () => touchStartTS = Date.now());
         img.addEventListener('click', (e) => {
             if (clickMode === 'none') return;
             if (Date.now() - touchStartTS > 250) return;
-
             const rect = img.getBoundingClientRect();
             const x = (e.clientX - rect.left) / (rect.width / screenWidth);
             const y = (e.clientY - rect.top) / (rect.height / screenHeight);
-            fetch('/api/click', {
+            apiFetch('/api/click', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ x, y, button: clickMode })
             });
         });
         img.addEventListener('contextmenu', e => e.preventDefault());
+
+        checkAuth();
     </script>
 </body>
 </html>
