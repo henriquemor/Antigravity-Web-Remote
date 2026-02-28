@@ -10,6 +10,12 @@
 
 ---
 
+<div align="center">
+  
+[<img alt="Support Tip Jar" title="Cheers!" src="https://img.shields.io/badge/Buy_me_a_coffee-F5C300?style=flat&logo=undertale&logoColor=white" />](https://coinos.io/hmoraes) 
+
+</div>
+
 ## ✨ Features
 
 This fork extends the original project from [lukasz-wronski antigravity-shit-chat](https://github.com/lukasz-wronski/antigravity-shit-chat):
@@ -22,7 +28,7 @@ This fork extends the original project from [lukasz-wronski antigravity-shit-cha
   - **Commit** changes
   - **Sync** (Pull/Push) with remote repositories
 - ✨ **UI**: typography and mobile optimizations.
-- 🖱️ **Clicking**: Click buttons in the chat interface remotely (via [sanderd fork](https://github.com/sanderd/Antigravity-Shit-Chat/tree/feature/remote-button-click)
+- 🖱️ **Clicking**: Click buttons in the chat interface remotely (via [sanderd fork](https://github.com/sanderd/Antigravity-Shit-Chat/tree/feature/remote-button-click))
 
 ---
 
