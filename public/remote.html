@@ -73,6 +73,9 @@
                 <a data-ms="500" class="active">500ms</a>
                 <a data-ms="1000">1s</a>
                 <a data-ms="2000">2s</a>
+                <a data-ms="4000">4s</a>
+                <a id="link-stop">stop</a>
+                <a id="link-fetch" style="display:none">fetch</a>
             </div>
             <div class="status-right">
                 <span id="res-info">Loading...</span>
@@ -109,6 +112,8 @@
         let clickMode = 'left';
         let refreshInterval = 500;
         let accessToken = localStorage.getItem('remote_token') || '';
+        let isStopped = false;
+        let refreshTimeout = null;
 
         // --- AUTH LOGIC ---
         async function checkAuth() {
@@ -124,7 +129,6 @@
                             localStorage.setItem('remote_token', pin);
                             init();
                         } else {
-                            // If cancelled, keep checking or show error
                             location.reload();
                         }
                     } else {
@@ -136,7 +140,6 @@
                 }
             } catch (e) { 
                 console.error("Auth check failed", e); 
-                // Retry in case of network glitch
                 setTimeout(checkAuth, 2000);
             }
         }
@@ -239,6 +242,24 @@
         }
 
         function refreshFrame() {
+            if (isStopped) return;
+            const startTime = Date.now();
+            const nextFrame = new Image();
+            const tokenParam = accessToken ? `&token=${accessToken}` : '';
+            nextFrame.src = `/api/screenshot?t=${startTime}${tokenParam}`;
+            nextFrame.onload = () => {
+                if (isStopped) return;
+                img.src = nextFrame.src;
+                lastUpdateTimestamp = Date.now();
+                refreshTimeout = setTimeout(refreshFrame, Math.max(50, refreshInterval - (Date.now() - startTime)));
+            };
+            nextFrame.onerror = () => {
+                if (isStopped) return;
+                refreshTimeout = setTimeout(refreshFrame, 200);
+            };
+        }
+
+        function fetchSingle() {
             const startTime = Date.now();
             const nextFrame = new Image();
             const tokenParam = accessToken ? `&token=${accessToken}` : '';
@@ -246,11 +267,6 @@
             nextFrame.onload = () => {
                 img.src = nextFrame.src;
                 lastUpdateTimestamp = Date.now();
-                setTimeout(refreshFrame, Math.max(50, refreshInterval - (Date.now() - startTime)));
-            };
-            nextFrame.onerror = () => {
-                // If it fails due to auth, stop refreshing and re-check auth
-                setTimeout(refreshFrame, 500);
             };
         }
 
@@ -260,9 +276,25 @@
 
         document.getElementById('interval-controls').onclick = (e) => {
             if (e.target.tagName === 'A') {
-                refreshInterval = parseInt(e.target.dataset.ms);
-                document.querySelectorAll('#interval-controls a').forEach(a => a.classList.remove('active'));
-                e.target.classList.add('active');
+                const target = e.target;
+                if (target.dataset.ms) {
+                    const wasStopped = isStopped;
+                    isStopped = false;
+                    refreshInterval = parseInt(target.dataset.ms);
+                    document.querySelectorAll('#interval-controls a').forEach(a => a.classList.remove('active'));
+                    target.classList.add('active');
+                    document.getElementById('link-stop').style.display = 'inline';
+                    document.getElementById('link-fetch').style.display = 'none';
+                    if (wasStopped) refreshFrame();
+                } else if (target.id === 'link-stop') {
+                    isStopped = true;
+                    clearTimeout(refreshTimeout);
+                    document.querySelectorAll('#interval-controls a').forEach(a => a.classList.remove('active'));
+                    target.style.display = 'none';
+                    document.getElementById('link-fetch').style.display = 'inline';
+                } else if (target.id === 'link-fetch') {
+                    fetchSingle();
+                }
             }
         };
 
