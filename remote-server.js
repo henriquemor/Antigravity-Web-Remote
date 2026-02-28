@@ -122,6 +122,49 @@ const startServer = () => {
         }
     });
 
+    app.post('/api/mouse-delta', auth, (req, res) => {
+        const { dx, dy } = req.body;
+        try {
+            const pos = robot.getMousePos();
+            robot.moveMouse(pos.x + (dx || 0), pos.y + (dy || 0));
+            res.json({ success: true, x: pos.x + dx, y: pos.y + dy });
+        } catch (err) {
+            res.status(500).json({ error: err.message });
+        }
+    });
+
+    app.post('/api/mouse-click', auth, (req, res) => {
+        const { button, action } = req.body;
+        try {
+            if (action === 'down') {
+                robot.mouseToggle('down', button || 'left');
+            } else if (action === 'up') {
+                robot.mouseToggle('up', button || 'left');
+            } else {
+                robot.mouseClick(button || 'left');
+            }
+            res.json({ success: true });
+        } catch (err) {
+            res.status(500).json({ error: err.message });
+        }
+    });
+
+    app.post('/api/key', auth, (req, res) => {
+        const { key, modifiers } = req.body;
+        try {
+            console.log(`Key tap: ${key}`);
+            if (key) {
+                robot.keyTap(key, modifiers || []);
+                res.json({ success: true });
+            } else {
+                res.status(400).json({ error: 'Key required' });
+            }
+        } catch (err) {
+            console.error('Key error:', err.message);
+            res.status(500).json({ error: err.message });
+        }
+    });
+
     const PORT = 3001;
     app.listen(PORT, '0.0.0.0', () => {
         console.log(`🚀 Running at: http://localhost:${PORT}/remote.html`);
