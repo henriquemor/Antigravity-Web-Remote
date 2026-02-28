@@ -1,10 +1,3 @@
-// Local Screenshot-based Remote Control
-// it sends screenshots of the desktop to a web page and receives mouse clicks and keyboard input
-
-// run with > node remote-server.js
-// or to fast start with pin > node remote-server.js pin 1233
-// to fast start without pin > node remote-server.js nopin
-
 import express from 'express';
 import screenshot from 'screenshot-desktop';
 import robot from 'robotjs';
@@ -37,8 +30,6 @@ const startServer = () => {
         res.json({ required: !!ACCESS_TOKEN });
     });
 
-    // --- APPLY AUTH TO ALL ENDPOINTS BELOW ---
-
     app.get('/api/info', auth, (req, res) => {
         try {
             const size = robot.getScreenSize();
@@ -50,8 +41,6 @@ const startServer = () => {
 
     let capturePromise = null;
     app.get('/api/screenshot', auth, async (req, res) => {
-        // AUTH IS CHECKED HERE FIRST BY EXPRESS
-        
         if (capturePromise) {
             try {
                 const img = await capturePromise;
@@ -84,14 +73,26 @@ const startServer = () => {
     });
 
     app.post('/api/click', auth, (req, res) => {
-        const { x, y, button } = req.body;
+        const { x, y, button, action } = req.body;
         try {
             const screenSize = robot.getScreenSize();
             const targetX = Math.floor(Math.max(0, Math.min(screenSize.width - 1, x)));
             const targetY = Math.floor(Math.max(0, Math.min(screenSize.height - 1, y)));
-            robot.moveMouse(targetX, targetY);
-            robot.mouseClick(button || 'left');
-            console.log(`${button || 'left'} click at: ${targetX}, ${targetY}`);
+            
+            if (action === 'move') {
+                robot.moveMouse(targetX, targetY);
+            } else if (action === 'down') {
+                robot.moveMouse(targetX, targetY);
+                robot.mouseToggle('down', button || 'left');
+            } else if (action === 'up') {
+                robot.moveMouse(targetX, targetY);
+                robot.mouseToggle('up', button || 'left');
+            } else {
+                // Default click
+                robot.moveMouse(targetX, targetY);
+                robot.mouseClick(button || 'left');
+            }
+            
             res.json({ success: true });
         } catch (err) {
             res.status(500).json({ error: err.message });

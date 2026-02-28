@@ -39,6 +39,9 @@
         }
         .btn.active { background: #28a745; border-color: #218838; font-weight: bold; }
 
+        /* Larger width for the Drag button */
+        .btn-drag { flex: 0 0 50px; }
+
         .btn-mini {
             padding: 2px 6px; font-size: 10px; flex: 0 0 auto; background: #444; color: #ccc;
         }
@@ -63,9 +66,36 @@
         #screen { display: block; width: auto; height: auto; }
 
         .update-time { color: #0f0; }
+
+        /* Auth Modal Styling */
+        #auth-overlay {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.9);
+            z-index: 1000; display: none; flex-direction: column;
+            align-items: center; justify-content: center;
+        }
+        #auth-modal {
+            background: #222; padding: 20px; border-radius: 8px;
+            border: 1px solid #444; width: 280px; text-align: center;
+        }
+        #auth-modal input {
+            width: 100%; padding: 10px; margin: 15px 0;
+            background: #000; border: 1px solid #444; color: white; border-radius: 4px;
+        }
+        #auth-modal button {
+            width: 100%; padding: 10px; background: #007bff;
+            border: none; color: white; border-radius: 4px; font-weight: bold;
+        }
     </style>
 </head>
 <body>
+    <div id="auth-overlay">
+        <div id="auth-modal">
+            <div style="font-weight:bold; margin-bottom:10px">Access Required</div>
+            <input type="password" id="pin-input" placeholder="Enter PIN">
+            <button id="btn-login">Connect</button>
+        </div>
+    </div>
+
     <div class="header">
         <div class="status-row">
             <div class="interval-links" id="interval-controls">
@@ -87,7 +117,7 @@
         <div class="controls-main">
             <button class="btn active" id="btn-left">L</button>
             <button class="btn" id="btn-right">R</button>
-            <button class="btn" id="btn-none">X</button>
+            <button class="btn btn-drag" id="btn-drag">Drag</button>
             <input type="text" id="text-input" placeholder="Type text...">
             <button class="btn" id="btn-send">send</button>
         </div>
@@ -177,10 +207,57 @@
             }
         }
 
-        viewport.addEventListener('touchstart', (e) => syncReferences(e.touches), {passive: false});
-        viewport.addEventListener('touchend', (e) => syncReferences(e.touches), {passive: false});
+        viewport.addEventListener('touchstart', (e) => {
+            if (clickMode === 'drag') {
+                const rect = img.getBoundingClientRect();
+                const x = (e.touches[0].clientX - rect.left) / (rect.width / screenWidth);
+                const y = (e.touches[0].clientY - rect.top) / (rect.height / screenHeight);
+                apiFetch('/api/click', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ x, y, button: 'left', action: 'down' })
+                });
+                return;
+            }
+            syncReferences(e.touches);
+        }, {passive: false});
+
+        viewport.addEventListener('touchend', (e) => {
+            if (clickMode === 'drag') {
+                const rect = img.getBoundingClientRect();
+                // For touchend, use changedTouches
+                const clientX = e.changedTouches[0].clientX;
+                const clientY = e.changedTouches[0].clientY;
+                const x = (clientX - rect.left) / (rect.width / screenWidth);
+                const y = (clientY - rect.top) / (rect.height / screenHeight);
+                apiFetch('/api/click', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ x, y, button: 'left', action: 'up' })
+                });
+                return;
+            }
+            syncReferences(e.touches);
+        }, {passive: false});
+
         viewport.addEventListener('touchmove', (e) => {
             e.preventDefault();
+            if (clickMode === 'drag') {
+                const rect = img.getBoundingClientRect();
+                const x = (e.touches[0].clientX - rect.left) / (rect.width / screenWidth);
+                const y = (e.touches[0].clientY - rect.top) / (rect.height / screenHeight);
+                // Throttle drag move slightly to avoid flooding
+                if (!window._lastDragMove || Date.now() - window._lastDragMove > 50) {
+                    window._lastDragMove = Date.now();
+                    apiFetch('/api/click', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ x, y, action: 'move' })
+                    });
+                }
+                return;
+            }
+            
             if (e.touches.length === 1) {
                 posX = refPosX + (e.touches[0].clientX - refSingleFinger.x);
                 posY = refPosY + (e.touches[0].clientY - refSingleFinger.y);
@@ -205,6 +282,7 @@
         // --- MOUSE Support ---
         let isDragging = false;
         viewport.addEventListener('mousedown', (e) => {
+            if (clickMode === 'drag') return;
             isDragging = true;
             refSingleFinger.x = e.clientX; refSingleFinger.y = e.clientY;
             refPosX = posX; refPosY = posY;
@@ -299,15 +377,26 @@
         };
 
         const setMode = (mode) => {
-            clickMode = mode;
+            // Toggle logic: if clicking active L or R, deactivate
+            if ((mode === 'left' || mode === 'right') && clickMode === mode) {
+                clickMode = 'none';
+            } else {
+                clickMode = mode;
+            }
+
             document.querySelectorAll('.controls-main .btn').forEach(b => {
                 if(b.id !== 'btn-send') b.classList.remove('active');
             });
-            document.getElementById('btn-' + mode).classList.add('active');
+
+            if (clickMode !== 'none') {
+                const activeBtn = document.getElementById('btn-' + clickMode);
+                if (activeBtn) activeBtn.classList.add('active');
+            }
         };
+
         document.getElementById('btn-left').onclick = () => setMode('left');
         document.getElementById('btn-right').onclick = () => setMode('right');
-        document.getElementById('btn-none').onclick = () => setMode('none');
+        document.getElementById('btn-drag').onclick = () => setMode('drag');
 
         const sendText = () => {
             const text = textInput.value;
@@ -324,7 +413,7 @@
         let touchStartTS = 0;
         img.addEventListener('touchstart', () => touchStartTS = Date.now());
         img.addEventListener('click', (e) => {
-            if (clickMode === 'none') return;
+            if (clickMode === 'none' || clickMode === 'drag') return;
             if (Date.now() - touchStartTS > 250) return;
             const rect = img.getBoundingClientRect();
             const x = (e.clientX - rect.left) / (rect.width / screenWidth);
