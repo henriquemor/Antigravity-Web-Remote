@@ -9,77 +9,74 @@ const app = express();
 app.use(express.json());
 app.use(express.static('public'));
 
-console.log('--- Iniciando Servidor de Controle Remoto (Resolução Total) ---');
+console.log('--- Servidor de Controle Remoto Ativo ---');
 
-// Endpoint para pegar informações da tela (Resolução Real)
+// Endpoint para pegar informações da tela
 app.get('/api/info', (req, res) => {
     try {
         const size = robot.getScreenSize();
-        console.log(`Resolução do Host: ${size.width}x${size.height}`);
         res.json(size);
     } catch (err) {
-        console.error('Erro ao obter tamanho da tela:', err);
         res.status(500).json({ error: err.message });
     }
 });
 
-// Cache para evitar capturas simultâneas
-let isCapturing = false;
-
-// Endpoint para a captura de tela (Retorna imagem JPEG original)
+// Endpoint para a captura de tela (Simples e Direto)
 app.get('/api/screenshot', async (req, res) => {
-    if (isCapturing) return; 
-    
-    isCapturing = true;
     try {
-        const displays = await screenshot.listDisplays();
-        const mainDisplay = displays[0] || { id: 0 };
-        
-        // Captura a tela original sem redimensionamento
-        const img = await screenshot({ format: 'jpg', screen: mainDisplay.id });
+        // Tenta capturar com timeout de 1s para não travar o servidor
+        const img = await Promise.race([
+            screenshot({ format: 'jpg' }),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 1000))
+        ]);
         
         res.set('Content-Type', 'image/jpeg');
         res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
         res.send(img);
-        
     } catch (err) {
-        console.error('Erro na captura:', err);
-        res.status(500).send('Erro: ' + err.message);
-    } finally {
-        isCapturing = false;
+        // Retorna erro rápido sem travar
+        res.status(503).send('Erro na captura');
     }
 });
 
 // Endpoint para processar o clique
 app.post('/api/click', (req, res) => {
-    const { x, y } = req.body;
+    const { x, y, button } = req.body;
     try {
         const screenSize = robot.getScreenSize();
-        
-        // Garante que o clique está dentro dos limites da tela
         const targetX = Math.floor(Math.max(0, Math.min(screenSize.width - 1, x)));
         const targetY = Math.floor(Math.max(0, Math.min(screenSize.height - 1, y)));
         
-        // Move o mouse suavemente ou instantaneamente
+        // Move e Clica em uma única operação síncrona para evitar drift
         robot.moveMouse(targetX, targetY);
+        robot.mouseClick(button || 'left');
         
-        // Pequeno delay opcional para garantir que o SO processou o movimento
-        setTimeout(() => {
-            robot.mouseClick();
-            console.log(`Clique executado em: ${targetX}, ${targetY}`);
-        }, 10);
-        
-        res.json({ success: true, x: targetX, y: targetY });
+        console.log(`Clique ${button || 'left'} em: ${targetX}, ${targetY}`);
+        res.json({ success: true });
     } catch (err) {
-        console.error('Erro ao executar clique:', err);
         res.status(500).json({ error: err.message });
+    }
+});
+
+// Endpoint para digitar texto
+app.post('/api/type', async (req, res) => {
+    const { text } = req.body;
+    try {
+        if (text) {
+            res.json({ success: true });
+            for (const char of text) {
+                robot.typeString(char);
+                await new Promise(r => setTimeout(r, 20));
+            }
+        } else {
+            res.status(400).json({ error: 'Vazio' });
+        }
+    } catch (err) {
+        if (!res.headersSent) res.status(500).json({ error: err.message });
     }
 });
 
 const PORT = 3001;
 app.listen(PORT, '0.0.0.0', () => {
-    console.log(`
-🚀 Servidor Remoto rodando em: http://localhost:${PORT}/remote.html
-Monitorando em intervalos de 500ms (conforme solicitado pelo front-end)
-`);
+    console.log(`🚀 Rodando em: http://localhost:${PORT}/remote.html`);
 });
