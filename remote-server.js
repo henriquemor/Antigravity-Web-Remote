@@ -5,6 +5,8 @@ import path from 'path';
 import readline from 'readline';
 import { fileURLToPath } from 'url';
 import sharp from 'sharp';
+import { WebSocketServer } from 'ws';
+import http from 'http';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -75,8 +77,11 @@ const startServer = () => {
 
     let capturePromise = null;
     app.get('/api/screenshot', auth, async (req, res) => {
-        const { x, y, w, h, q } = req.query;
+        const { x, y, w, h, q, gs, fmt } = req.query;
         const quality = parseInt(q) || 8;
+        const format = fmt || 'jpg'; // Default back to jpg
+        const grayscale = gs === 'true';
+        
         const hasCrop = x !== undefined && y !== undefined && w !== undefined && h !== undefined;
         
         const cropParams = hasCrop ? {
@@ -86,8 +91,8 @@ const startServer = () => {
             height: Math.floor(parseFloat(h))
         } : null;
 
-        // If no crop and no quality change (or default), we can use the cached promise
-        if (capturePromise && !cropParams && quality === 8) {
+        // If no crop, no quality change, default format, and no grayscale, we can use the cached promise
+        if (capturePromise && !cropParams && quality === 8 && format === 'jpg' && !grayscale) {
             try {
                 const img = await capturePromise;
                 res.set('Content-Type', 'image/jpeg');
@@ -98,7 +103,7 @@ const startServer = () => {
         const capture = async () => {
             try {
                 let img = await Promise.race([
-                    screenshot({ format: 'jpg' }),
+                    screenshot({ format: 'jpg' }), // Raw capture as JPG from OS
                     new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 2000))
                 ]);
 
@@ -113,8 +118,16 @@ const startServer = () => {
                     pipeline = pipeline.extract({ left, top, width, height });
                 }
 
-                // Always apply quality via sharp if q is specified or if we cropped
-                img = await pipeline.jpeg({ quality }).toBuffer();
+                if (grayscale) {
+                    pipeline = pipeline.grayscale();
+                }
+
+                // Process output format
+                if (format === 'webp') {
+                    img = await pipeline.webp({ quality }).toBuffer();
+                } else {
+                    img = await pipeline.jpeg({ quality }).toBuffer();
+                }
                 
                 return img;
             } catch (err) {
@@ -123,22 +136,51 @@ const startServer = () => {
             }
         };
 
-        // Cache full-frame with default quality only
-        if (!cropParams && quality === 8) {
+        // Cache full-frame with default settings only
+        if (!cropParams && quality === 8 && format === 'jpg' && !grayscale) {
             capturePromise = capture().finally(() => {
                 setTimeout(() => { capturePromise = null; }, 50);
             });
         }
 
         try {
-            const img = (cropParams || quality !== 8) ? await capture() : await capturePromise;
-            res.set('Content-Type', 'image/jpg');
+            const needsCustomCapture = cropParams || quality !== 8 || format !== 'jpg' || grayscale;
+            const img = needsCustomCapture ? await capture() : await capturePromise;
+            res.set('Content-Type', format === 'webp' ? 'image/webp' : 'image/jpeg');
             res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
             res.send(img);
         } catch (err) {
             if (!res.headersSent) res.status(503).send('Capture Error');
         }
     });
+
+    // Helper for WS / API shared capture
+    async function getProcessedScreenshot(params) {
+        const { x, y, w, h, q, gs, fmt } = params;
+        const quality = parseInt(q) || 8;
+        const format = fmt || 'jpg';
+        const grayscale = gs === 'true';
+        const hasCrop = x !== undefined && y !== undefined && w !== undefined && h !== undefined;
+
+        let img = await Promise.race([
+            screenshot({ format: 'jpg' }),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 2000))
+        ]);
+
+        let pipeline = sharp(img);
+        if (hasCrop) {
+            const metadata = await pipeline.metadata();
+            const left = Math.max(0, Math.min(metadata.width - 1, Math.floor(parseFloat(x))));
+            const top = Math.max(0, Math.min(metadata.height - 1, Math.floor(parseFloat(y))));
+            const width = Math.max(1, Math.min(metadata.width - left, Math.floor(parseFloat(w))));
+            const height = Math.max(1, Math.min(metadata.height - top, Math.floor(parseFloat(h))));
+            pipeline = pipeline.extract({ left, top, width, height });
+        }
+        if (grayscale) pipeline = pipeline.grayscale();
+        
+        if (format === 'webp') return await pipeline.webp({ quality }).toBuffer();
+        return await pipeline.jpeg({ quality }).toBuffer();
+    }
 
     app.post('/api/click', auth, (req, res) => {
         const { x, y, button, action } = req.body;
@@ -225,7 +267,28 @@ const startServer = () => {
     });
 
     const PORT = 3001;
-    app.listen(PORT, '0.0.0.0', () => {
+    const server = http.createServer(app);
+    const wss = new WebSocketServer({ server });
+
+    wss.on('connection', (ws) => {
+        ws.on('message', async (data) => {
+            try {
+                const msg = JSON.parse(data);
+                if (ACCESS_TOKEN && msg.token !== ACCESS_TOKEN) {
+                    return ws.send(JSON.stringify({ error: '401' }));
+                }
+
+                if (msg.type === 'request_frame') {
+                    const img = await getProcessedScreenshot(msg.params || {});
+                    ws.send(img); // Binary send
+                }
+            } catch (e) {
+                console.error('WS Error:', e.message);
+            }
+        });
+    });
+
+    server.listen(PORT, '0.0.0.0', () => {
         console.log(`🚀 Running at: http://localhost:${PORT}/remote.html`);
         if (ACCESS_TOKEN) console.log(`🔐 PROTECTED with PIN: ${ACCESS_TOKEN}`);
         else console.log(`🔓 UNPROTECTED (No PIN)`);

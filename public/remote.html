@@ -30,6 +30,9 @@
             font-size: 10px; font-family: monospace; color: #888;
         }
 
+        #res-info { cursor: pointer; user-select: none; }
+        #res-info:hover { color: #fff; }
+
         .status-right { display: flex; align-items: center; gap: 8px; }
 
         .interval-links a { color: #007bff; text-decoration: none; cursor: pointer; margin-right: 5px; padding: 2px 4px; }
@@ -195,6 +198,13 @@
                     <option value="100">100%</option>
                 </select>
             </div>
+            <div style="display: flex; align-items: center; gap: 4px; background: #333; padding: 0 8px; border-radius: 4px; font-size: 11px; flex: 0 0 auto;">
+                <select id="select-format" style="background: transparent; color: white; border: none; font-size: 11px; outline: none; cursor: pointer; padding: 4px 0;">
+                    <option value="webp">WebP</option>
+                    <option value="jpg" selected>JPG</option>
+                </select>
+            </div>
+            <button class="btn" id="btn-grayscale" style="flex: 0 0 40px; font-size: 10px; padding: 0;">BW</button>
         </div>
     </div>
 
@@ -235,9 +245,40 @@
         let accessToken = localStorage.getItem('remote_token') || '';
         let isStopped = false;
         let refreshTimeout = null;
+        let isGrayscale = false;
+        let ws = null;
+        let wsActive = false;
+
+        // Data Reset
+        resInfo.onclick = (e) => {
+            e.stopPropagation();
+            totalBytes = 0;
+            resInfo.innerText = "0.0 KB";
+        };
 
         let scale = 1, posX = 0, posY = 0;
         let refScale = 1, refPosX = 0, refPosY = 0;
+        
+        function connectWS() {
+            const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            ws = new WebSocket(`${proto}//${location.host}`);
+            ws.binaryType = 'blob';
+            ws.onopen = () => { wsActive = true; console.log('WS Connected'); };
+            ws.onclose = () => { wsActive = false; console.log('WS Closed'); setTimeout(connectWS, 3000); };
+            ws.onmessage = (e) => {
+                if (e.data instanceof Blob) {
+                    handleFrameBlob(e.data);
+                } else {
+                    const msg = JSON.parse(e.data);
+                    if (msg.error === '401') {
+                        accessToken = '';
+                        localStorage.removeItem('remote_token');
+                        document.getElementById('login-overlay').style.display = 'flex';
+                    }
+                }
+            };
+        }
+        connectWS();
         let refMidpoint = { x: 0, y: 0 }, refPinchDist = 0;
         let _vLastTouch = null;
 
@@ -471,6 +512,13 @@
             syncReferences(getV(e?.touches || []));
         });
 
+        attachControl('btn-grayscale', () => {
+            isGrayscale = !isGrayscale;
+            document.getElementById('btn-grayscale').classList.toggle('active', isGrayscale);
+            clearTimeout(refreshTimeout);
+            refreshFrame();
+        });
+
         attachControl('btn-select-region', () => {
             const btn = document.getElementById('btn-select-region');
             if (currentRegion) {
@@ -527,7 +575,8 @@
             } else if (target.id === 'link-fetch') {
                 const n = new Image();
                 const q = document.getElementById('select-quality').value;
-                let url = `/api/screenshot?t=${Date.now()}${accessToken ? '&token='+accessToken : ''}&q=${q}`;
+                const fmt = document.getElementById('select-format').value;
+                let url = `/api/screenshot?t=${Date.now()}${accessToken ? '&token='+accessToken : ''}&q=${q}&fmt=${fmt}&gs=${isGrayscale}`;
                 if (currentRegion) {
                     url += `&x=${currentRegion.x}&y=${currentRegion.y}&w=${currentRegion.w}&h=${currentRegion.h}`;
                 }
@@ -594,51 +643,68 @@
                 }
             } catch (e) {}
         }
+        let lastFrameStart = 0;
+        function handleFrameBlob(blob) {
+            const target = currentRegion ? regionOverlay : img;
+            totalBytes += blob.size;
+            
+            if (totalBytes > 1024 * 1024) {
+                resInfo.innerText = `${(totalBytes / (1024 * 1024)).toFixed(2)} MB`;
+            } else {
+                resInfo.innerText = `${(totalBytes / 1024).toFixed(1)} KB`;
+            }
+            
+            const blobUrl = URL.createObjectURL(blob);
+            const oldUrl = target.src;
+            target.src = blobUrl;
+            
+            target.onload = () => {
+                if (oldUrl.startsWith('blob:')) URL.revokeObjectURL(oldUrl);
+                if (isStopped) return;
+                
+                lastUpdateTimestamp = Date.now();
+                updateMouse();
+                
+                if (currentRegion) {
+                    regionOverlay.style.display = 'block';
+                } else {
+                    regionOverlay.style.display = 'none';
+                }
+
+                document.querySelectorAll('.btn-pending').forEach(b => b.classList.remove('btn-pending'));
+                const delay = Math.max(50, refreshInterval - (Date.now() - lastFrameStart));
+                refreshTimeout = setTimeout(refreshFrame, delay);
+            };
+        }
+
         function refreshFrame() {
             if (isStopped) return;
             clearTimeout(refreshTimeout);
-            const s = Date.now();
+            lastFrameStart = Date.now();
             
             const q = document.getElementById('select-quality').value;
-            let url = `/api/screenshot?t=${s}${accessToken ? '&token='+accessToken : ''}&q=${q}`;
+            const fmt = document.getElementById('select-format').value;
+
+            if (wsActive) {
+                ws.send(JSON.stringify({
+                    type: 'request_frame',
+                    token: accessToken,
+                    params: {
+                        q, fmt, gs: isGrayscale.toString(),
+                        ...(currentRegion || {})
+                    }
+                }));
+                return;
+            }
+            
+            let url = `/api/screenshot?t=${lastFrameStart}${accessToken ? '&token='+accessToken : ''}&q=${q}&fmt=${fmt}&gs=${isGrayscale}`;
             if (currentRegion) {
                 url += `&x=${currentRegion.x}&y=${currentRegion.y}&w=${currentRegion.w}&h=${currentRegion.h}`;
             }
 
-            const target = currentRegion ? regionOverlay : img;
-            
             apiFetch(url).then(async r => {
                 if (!r.ok) throw new Error('Fetch failed');
-                const blob = await r.blob();
-                totalBytes += blob.size;
-                
-                if (totalBytes > 1024 * 1024) {
-                    resInfo.innerText = `${(totalBytes / (1024 * 1024)).toFixed(2)} MB`;
-                } else {
-                    resInfo.innerText = `${(totalBytes / 1024).toFixed(1)} KB`;
-                }
-                
-                const blobUrl = URL.createObjectURL(blob);
-                const oldUrl = target.src;
-                target.src = blobUrl;
-                
-                target.onload = () => {
-                    if (oldUrl.startsWith('blob:')) URL.revokeObjectURL(oldUrl);
-                    if (isStopped) return;
-                    
-                    lastUpdateTimestamp = Date.now();
-                    updateMouse();
-                    
-                    if (currentRegion) {
-                        regionOverlay.style.display = 'block';
-                    } else {
-                        regionOverlay.style.display = 'none';
-                    }
-
-                    document.querySelectorAll('.btn-pending').forEach(b => b.classList.remove('btn-pending'));
-                    const delay = Math.max(50, refreshInterval - (Date.now() - s));
-                    refreshTimeout = setTimeout(refreshFrame, delay);
-                };
+                handleFrameBlob(await r.blob());
             }).catch(err => {
                 console.warn('Screenshot fetch error:', err);
                 if (!isStopped) refreshTimeout = setTimeout(refreshFrame, 500);
