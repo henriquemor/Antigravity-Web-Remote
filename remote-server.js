@@ -11,8 +11,34 @@ const app = express();
 let ACCESS_TOKEN = null;
 
 const startServer = () => {
-    app.use(express.json());
+    app.use(express.json({ limit: '10mb' }));
     app.use(express.static('public'));
+
+    // ... (rest of the auth logic remains the same)
+
+    let typingQueue = [];
+    let isTyping = false;
+
+    async function processTypingQueue() {
+        if (isTyping || typingQueue.length === 0) return;
+        isTyping = true;
+        try {
+            while (typingQueue.length > 0) {
+                const text = typingQueue.shift();
+                console.log(`Typing chunk of ${text.length} chars...`);
+                for (const char of text) {
+                    robot.typeString(char);
+                    // Minimal delay between characters
+                    await new Promise(r => setTimeout(r, 1));
+                }
+            }
+        } catch (e) {
+            console.error('Typing error:', e);
+        } finally {
+            isTyping = false;
+            if (typingQueue.length > 0) processTypingQueue();
+        }
+    }
 
     const auth = (req, res, next) => {
         if (!ACCESS_TOKEN) return next();
@@ -108,12 +134,10 @@ const startServer = () => {
         const { text } = req.body;
         try {
             if (text) {
-                console.log(`Typing: ${text}`);
+                console.log(`Queuing text: ${text.slice(0, 50)}${text.length > 50 ? '...' : ''} (${text.length} chars)`);
                 res.json({ success: true });
-                for (const char of text) {
-                    robot.typeString(char);
-                    await new Promise(r => setTimeout(r, 20));
-                }
+                typingQueue.push(text);
+                processTypingQueue();
             } else {
                 res.status(400).json({ error: 'Empty' });
             }

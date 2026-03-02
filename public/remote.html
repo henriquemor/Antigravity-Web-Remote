@@ -51,6 +51,7 @@
         .btn-toggle-active { background: #007bff; border-color: #0056b3; }
 
         #btn-drag.holding { background: #dc3545; border-color: #bd2130; animation: pulse 1s infinite; }
+        .btn-pending { background: #ffc107 !important; color: #000 !important; border-color: #d39e00 !important; }
         @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.7; } 100% { opacity: 1; } }
 
         input[type="text"] {
@@ -66,7 +67,7 @@
             flex-wrap: wrap; justify-content: center;
         }
         .controls-extra .btn { 
-            flex: 1 1 40px; min-width: 40px; padding: 10px 2px;
+            flex: 1 1 38px; min-width: 38px; padding: 10px 2px;
             background: #222; font-weight: bold;
         }
         .controls-extra .btn-key { background: #444; }
@@ -136,6 +137,7 @@
             <button class="btn btn-key" data-key="down">↓</button>
             <button class="btn btn-key" data-key="left">←</button>
             <button class="btn btn-key" data-key="right">→</button>
+            <button class="btn btn-key" data-key="backspace">Bksp</button>
             <button class="btn btn-key" data-key="enter">Ent</button>
             <button class="btn btn-key" data-key="tab">Tab</button>
             <button class="btn btn-key" data-key="escape">Esc</button>
@@ -192,8 +194,9 @@
             } catch (e) { setTimeout(checkAuth, 2000); }
         }
 
-        const apiFetch = (url, options = {}) => {
+        const apiFetch = (url, options = {}, el = null) => {
             if (accessToken) options.headers = { ...options.headers, 'x-auth-token': accessToken };
+            if (el && el.classList) el.classList.add('btn-pending');
             return fetch(url, options);
         };
 
@@ -221,10 +224,10 @@
             if (v.length === 1) {
                 const rect = img.getBoundingClientRect();
                 _vLastTouch = { x: v[0].clientX, y: v[0].clientY };
-                if (!isTrackpad && clickMode === 'drag') {
+                if (!isTrackpad && (clickMode === 'drag' || clickMode === 'left' || clickMode === 'right')) {
                     const x = (v[0].clientX - rect.left) / (rect.width / screenWidth);
                     const y = (v[0].clientY - rect.top) / (rect.height / screenHeight);
-                    apiFetch('/api/click', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ x, y, button: 'left', action: 'down' }) });
+                    apiFetch('/api/click', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ x, y, button: (clickMode === 'none' || clickMode === 'drag') ? 'left' : clickMode, action: 'down' }) });
                 }
             }
             syncReferences(v);
@@ -233,11 +236,11 @@
         viewport.addEventListener('touchend', (e) => {
             const vC = getV(e.changedTouches);
             const vT = getV(e.touches);
-            if (!isTrackpad && clickMode === 'drag' && vC.length === 1 && vT.length === 0) {
+            if (!isTrackpad && (clickMode === 'drag' || clickMode === 'left' || clickMode === 'right') && vC.length === 1 && vT.length === 0) {
                 const rect = img.getBoundingClientRect();
                 const x = (vC[0].clientX - rect.left) / (rect.width / screenWidth);
                 const y = (vC[0].clientY - rect.top) / (rect.height / screenHeight);
-                apiFetch('/api/click', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ x, y, button: 'left', action: 'up' }) });
+                apiFetch('/api/click', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ x, y, button: (clickMode === 'none' || clickMode === 'drag') ? 'left' : clickMode, action: 'up' }) });
             }
             syncReferences(vT);
         }, {passive: false});
@@ -362,7 +365,7 @@
         document.querySelectorAll('.btn-key').forEach(btn => {
             btn.onclick = (e) => {
                 e.stopPropagation();
-                apiFetch('/api/key', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: btn.dataset.key }) });
+                apiFetch('/api/key', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: btn.dataset.key }) }, btn);
             };
         });
 
@@ -408,6 +411,7 @@
             n.src = `/api/screenshot?t=${s}${accessToken ? '&token='+accessToken : ''}`;
             n.onload = () => {
                 if (isStopped) return; img.src = n.src; lastUpdateTimestamp = Date.now(); updateMouse();
+                document.querySelectorAll('.btn-pending').forEach(b => b.classList.remove('btn-pending'));
                 refreshTimeout = setTimeout(refreshFrame, Math.max(50, refreshInterval - (Date.now() - s)));
             };
             n.onerror = () => { if (!isStopped) setTimeout(refreshFrame, 200); };
@@ -420,15 +424,7 @@
             } 
         });
         img.addEventListener('touchend', (e) => {
-            const vC = getV(e.changedTouches);
-            const vT = getV(e.touches);
-            if (isTrackpad || vC.length !== 1 || vT.length > 0 || clickMode === 'none' || clickMode === 'drag') return;
-            if (Date.now() - window._tstart < 300 && Math.hypot(vC[0].clientX - window._lpos.x, vC[0].clientY - window._lpos.y) < 10) {
-                const r = img.getBoundingClientRect();
-                const x = (vC[0].clientX - r.left) / (r.width / screenWidth);
-                const y = (vC[0].clientY - r.top) / (r.height / screenHeight);
-                apiFetch('/api/click', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ x, y, button: clickMode }) });
-            }
+            // Logic moved to viewport touchend for better drag support
         });
 
         checkAuth();
