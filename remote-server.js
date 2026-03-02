@@ -4,6 +4,7 @@ import robot from 'robotjs';
 import path from 'path';
 import readline from 'readline';
 import { fileURLToPath } from 'url';
+import sharp from 'sharp';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -74,7 +75,19 @@ const startServer = () => {
 
     let capturePromise = null;
     app.get('/api/screenshot', auth, async (req, res) => {
-        if (capturePromise) {
+        const { x, y, w, h, q } = req.query;
+        const quality = parseInt(q) || 8;
+        const hasCrop = x !== undefined && y !== undefined && w !== undefined && h !== undefined;
+        
+        const cropParams = hasCrop ? {
+            left: Math.floor(parseFloat(x)),
+            top: Math.floor(parseFloat(y)),
+            width: Math.floor(parseFloat(w)),
+            height: Math.floor(parseFloat(h))
+        } : null;
+
+        // If no crop and no quality change (or default), we can use the cached promise
+        if (capturePromise && !cropParams && quality === 8) {
             try {
                 const img = await capturePromise;
                 res.set('Content-Type', 'image/jpeg');
@@ -82,26 +95,48 @@ const startServer = () => {
             } catch(e) {}
         }
 
-        capturePromise = (async () => {
+        const capture = async () => {
             try {
-                const img = await Promise.race([
+                let img = await Promise.race([
                     screenshot({ format: 'jpg' }),
-                    new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 1000))
+                    new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 2000))
                 ]);
+
+                let pipeline = sharp(img);
+                
+                if (cropParams) {
+                    const metadata = await pipeline.metadata();
+                    const left = Math.max(0, Math.min(metadata.width - 1, cropParams.left));
+                    const top = Math.max(0, Math.min(metadata.height - 1, cropParams.top));
+                    const width = Math.max(1, Math.min(metadata.width - left, cropParams.width));
+                    const height = Math.max(1, Math.min(metadata.height - top, cropParams.height));
+                    pipeline = pipeline.extract({ left, top, width, height });
+                }
+
+                // Always apply quality via sharp if q is specified or if we cropped
+                img = await pipeline.jpeg({ quality }).toBuffer();
+                
                 return img;
-            } finally {
-                setTimeout(() => { capturePromise = null; }, 50);
+            } catch (err) {
+                console.error(`Capture/Crop error: ${err.message}`, cropParams);
+                throw err;
             }
-        })();
+        };
+
+        // Cache full-frame with default quality only
+        if (!cropParams && quality === 8) {
+            capturePromise = capture().finally(() => {
+                setTimeout(() => { capturePromise = null; }, 50);
+            });
+        }
 
         try {
-            const img = await capturePromise;
-            res.set('Content-Type', 'image/jpeg');
+            const img = (cropParams || quality !== 8) ? await capture() : await capturePromise;
+            res.set('Content-Type', 'image/jpg');
             res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
             res.send(img);
         } catch (err) {
-            console.error('Capture error:', err.message);
-            res.status(503).send('Capture Error');
+            if (!res.headersSent) res.status(503).send('Capture Error');
         }
     });
 

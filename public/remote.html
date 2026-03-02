@@ -94,6 +94,30 @@
             display: none;
             transform: translate(-18.75%, -18.75%);
         }
+
+        /* Region Selection */
+        #region-selector {
+            position: absolute;
+            border: 1px dashed #0f0;
+            background: rgba(0, 255, 0, 0.2);
+            display: none;
+            pointer-events: none;
+            z-index: 150;
+            box-shadow: 0 0 0 4000px rgba(0,0,0,0.3); /* Dim outside */
+        }
+        
+        .selecting #region-selector {
+            border: 1px solid #fff;
+            outline: 1px dashed #000;
+        }
+
+        #region-overlay {
+            position: absolute;
+            border: 1px dotted rgba(0, 255, 0, 0.5);
+            display: none;
+            z-index: 90;
+            box-sizing: content-box;
+        }
     </style>
 </head>
 <body oncontextmenu="return false;">
@@ -105,14 +129,29 @@
         </div>
     </div>
 
+    <script>
+        // Login Logic
+        document.getElementById('btn-login').onclick = () => {
+            const pin = document.getElementById('pin-input').value;
+            if (pin) {
+                localStorage.setItem('remote_token', pin);
+                window.location.reload();
+            }
+        };
+        document.getElementById('pin-input').onkeypress = (e) => {
+            if (e.key === 'Enter') document.getElementById('btn-login').click();
+        };
+    </script>
+
     <div class="header">
         <div class="status-row">
             <div class="interval-links" id="interval-controls">
                 <a data-ms="100">100ms</a>
-                <a data-ms="500" class="active">500ms</a>
+                <a data-ms="500">500ms</a>
                 <a data-ms="1000">1s</a>
                 <a data-ms="2000">2s</a>
                 <a data-ms="4000">4s</a>
+                <a data-ms="10000" class="active">10s</a>
                 <a id="link-stop">stop</a>
                 <a id="link-fetch" style="display:none">fetch</a>
             </div>
@@ -141,6 +180,21 @@
             <button class="btn btn-key" data-key="enter">Ent</button>
             <button class="btn btn-key" data-key="tab">Tab</button>
             <button class="btn btn-key" data-key="escape">Esc</button>
+            <button class="btn" id="btn-select-region" style="flex: 0 0 100px;">Select Region</button>
+            <div style="display: flex; align-items: center; gap: 4px; background: #333; padding: 0 8px; border-radius: 4px; font-size: 11px; flex: 0 0 auto;">
+                <span>Q:</span>
+                <select id="select-quality" style="background: transparent; color: white; border: none; font-size: 11px; outline: none; cursor: pointer; padding: 4px 0;">
+                    <option value="1">1%</option>
+                    <option value="2">2%</option>
+                    <option value="5">5%</option>
+                    <option value="7">7%</option>
+                    <option value="8" selected>8%</option>
+                    <option value="10">10%</option>
+                    <option value="20">20%</option>
+                    <option value="60">60%</option>
+                    <option value="100">100%</option>
+                </select>
+            </div>
         </div>
     </div>
 
@@ -153,6 +207,8 @@
                 </svg>
             </div>
             <img id="screen" src="" alt="Snapshot">
+            <img id="region-overlay" src="" alt="Region">
+            <div id="region-selector"></div>
         </div>
     </div>
 
@@ -169,12 +225,13 @@
         const textInput = document.getElementById('text-input');
         const virtualCursor = document.getElementById('virtual-cursor');
         
+        let totalBytes = 0;
         let screenWidth = 2560, screenHeight = 1440;
         let lastUpdateTimestamp = Date.now();
         let clickMode = 'none';
         let isTrackpad = false;
         let isDragging = false;
-        let refreshInterval = 500;
+        let refreshInterval = 10000;
         let accessToken = localStorage.getItem('remote_token') || '';
         let isStopped = false;
         let refreshTimeout = null;
@@ -183,6 +240,12 @@
         let refScale = 1, refPosX = 0, refPosY = 0;
         let refMidpoint = { x: 0, y: 0 }, refPinchDist = 0;
         let _vLastTouch = null;
+
+        let regionMode = false;
+        let regionStart = null;
+        let currentRegion = null;
+        const regionSelector = document.getElementById('region-selector');
+        const regionOverlay = document.getElementById('region-overlay');
 
         async function checkAuth() {
             try {
@@ -197,7 +260,14 @@
         const apiFetch = (url, options = {}, el = null) => {
             if (accessToken) options.headers = { ...options.headers, 'x-auth-token': accessToken };
             if (el && el.classList) el.classList.add('btn-pending');
-            return fetch(url, options);
+            return fetch(url, options).then(r => {
+                if (r.status === 401) {
+                    localStorage.removeItem('remote_token');
+                    accessToken = '';
+                    document.getElementById('auth-overlay').style.display = 'flex';
+                }
+                return r;
+            });
         };
 
         function updateTransform() {
@@ -224,6 +294,23 @@
             if (v.length === 1) {
                 const rect = img.getBoundingClientRect();
                 _vLastTouch = { x: v[0].clientX, y: v[0].clientY };
+
+                if (regionMode) {
+                    const ratioX = rect.width / img.naturalWidth;
+                    const ratioY = rect.height / img.naturalHeight;
+                    const x = (v[0].clientX - rect.left) / ratioX;
+                    const y = (v[0].clientY - rect.top) / ratioY;
+                    
+                    regionStart = { x, y, clientX: v[0].clientX, clientY: v[0].clientY };
+                    regionSelector.style.display = 'block';
+                    regionSelector.style.left = x + 'px';
+                    regionSelector.style.top = y + 'px';
+                    regionSelector.style.width = '0';
+                    regionSelector.style.height = '0';
+                    viewport.classList.add('selecting');
+                    return;
+                }
+
                 if (!isTrackpad && (clickMode === 'drag' || clickMode === 'left' || clickMode === 'right')) {
                     const x = (v[0].clientX - rect.left) / (rect.width / screenWidth);
                     const y = (v[0].clientY - rect.top) / (rect.height / screenHeight);
@@ -236,6 +323,51 @@
         viewport.addEventListener('touchend', (e) => {
             const vC = getV(e.changedTouches);
             const vT = getV(e.touches);
+
+            if (regionMode && regionStart) {
+                const rect = img.getBoundingClientRect();
+                const t = vC[0];
+                const ratioX = rect.width / img.naturalWidth;
+                const ratioY = rect.height / img.naturalHeight;
+                
+                let x2 = (t.clientX - rect.left) / ratioX;
+                let y2 = (t.clientY - rect.top) / ratioY;
+
+                // Clamp to natural image bounds
+                const x1 = Math.max(0, Math.min(img.naturalWidth - 1, regionStart.x));
+                const y1 = Math.max(0, Math.min(img.naturalHeight - 1, regionStart.y));
+                x2 = Math.max(0, Math.min(img.naturalWidth - 1, x2));
+                y2 = Math.max(0, Math.min(img.naturalHeight - 1, y2));
+
+                const x = Math.min(x1, x2);
+                const y = Math.min(y1, y2);
+                const w = Math.min(Math.abs(x1 - x2), img.naturalWidth - x);
+                const h = Math.min(Math.abs(y1 - y2), img.naturalHeight - y);
+
+                if (w > 10 && h > 10) {
+                    currentRegion = { x, y, w, h };
+                    // Position overlay precisely in the unscaled coordinate system of screen-wrapper
+                    regionOverlay.style.left = x + 'px';
+                    regionOverlay.style.top = y + 'px';
+                    regionOverlay.style.width = w + 'px';
+                    regionOverlay.style.height = h + 'px';
+                    regionOverlay.style.display = 'block';
+                    
+                    regionMode = false;
+                    viewport.classList.remove('selecting');
+                    const btn = document.getElementById('btn-select-region');
+                    btn.classList.remove('active');
+                    btn.innerText = 'Refresh Full';
+                    
+                    clearTimeout(refreshTimeout);
+                    refreshFrame();
+                }
+                
+                regionSelector.style.display = 'none';
+                regionStart = null;
+                return;
+            }
+
             if (!isTrackpad && (clickMode === 'drag' || clickMode === 'left' || clickMode === 'right') && vC.length === 1 && vT.length === 0) {
                 const rect = img.getBoundingClientRect();
                 const x = (vC[0].clientX - rect.left) / (rect.width / screenWidth);
@@ -251,6 +383,26 @@
             if (v.length === 1) {
                 const rect = img.getBoundingClientRect();
                 const t = v[0];
+                if (regionMode && regionStart) {
+                    const rect = img.getBoundingClientRect();
+                    const ratioX = rect.width / img.naturalWidth;
+                    const ratioY = rect.height / img.naturalHeight;
+                    
+                    const curX_img = (t.clientX - rect.left) / ratioX;
+                    const curY_img = (t.clientY - rect.top) / ratioY;
+                    
+                    const left = Math.min(regionStart.x, curX_img);
+                    const top = Math.min(regionStart.y, curY_img);
+                    const width = Math.abs(regionStart.x - curX_img);
+                    const height = Math.abs(regionStart.y - curY_img);
+
+                    regionSelector.style.left = left + 'px';
+                    regionSelector.style.top = top + 'px';
+                    regionSelector.style.width = width + 'px';
+                    regionSelector.style.height = height + 'px';
+                    return;
+                }
+
                 if (isTrackpad) {
                     if (!_vLastTouch) { _vLastTouch = { x: t.clientX, y: t.clientY }; return; }
                     const dx = (t.clientX - _vLastTouch.x) / (rect.width / screenWidth);
@@ -319,6 +471,25 @@
             syncReferences(getV(e?.touches || []));
         });
 
+        attachControl('btn-select-region', () => {
+            const btn = document.getElementById('btn-select-region');
+            if (currentRegion) {
+                // Reset mode: Clear region
+                currentRegion = null;
+                regionOverlay.style.display = 'none';
+                btn.classList.remove('active');
+                btn.innerText = 'Select Region';
+                clearTimeout(refreshTimeout);
+                refreshFrame(); // Force full frame update
+            } else {
+                regionMode = !regionMode;
+                btn.classList.toggle('active', regionMode);
+                if (regionMode) {
+                    setMode('none');
+                }
+            }
+        });
+
         const setMode = (m) => {
             if (isTrackpad) return;
             clickMode = (clickMode === m && (m === 'left' || m === 'right')) ? 'none' : m;
@@ -340,11 +511,13 @@
 
         const handleIntervalClick = (target) => {
             if (target.dataset.ms) {
-                isStopped = false; refreshInterval = parseInt(target.dataset.ms);
+                isStopped = false; 
+                refreshInterval = parseInt(target.dataset.ms);
                 document.querySelectorAll('#interval-controls a').forEach(a => a.classList.remove('active'));
                 target.classList.add('active');
                 document.getElementById('link-stop').style.display = 'inline';
                 document.getElementById('link-fetch').style.display = 'none';
+                clearTimeout(refreshTimeout);
                 refreshFrame();
             } else if (target.id === 'link-stop') {
                 isStopped = true; clearTimeout(refreshTimeout);
@@ -353,14 +526,32 @@
                 document.getElementById('link-fetch').style.display = 'inline';
             } else if (target.id === 'link-fetch') {
                 const n = new Image();
-                n.src = `/api/screenshot?t=${Date.now()}${accessToken ? '&token='+accessToken : ''}`;
-                n.onload = () => { img.src = n.src; lastUpdateTimestamp = Date.now(); updateMouse(); };
+                const q = document.getElementById('select-quality').value;
+                let url = `/api/screenshot?t=${Date.now()}${accessToken ? '&token='+accessToken : ''}&q=${q}`;
+                if (currentRegion) {
+                    url += `&x=${currentRegion.x}&y=${currentRegion.y}&w=${currentRegion.w}&h=${currentRegion.h}`;
+                }
+                n.src = url;
+                n.onload = () => { 
+                    if (currentRegion) {
+                        regionOverlay.src = n.src;
+                        regionOverlay.style.display = 'block';
+                    } else {
+                        img.src = n.src; 
+                    }
+                    lastUpdateTimestamp = Date.now(); 
+                    updateMouse(); 
+                };
             }
         };
 
-        extraLinks.addEventListener('touchstart', (e) => {
-            if (e.target.tagName === 'A') { e.preventDefault(); e.stopPropagation(); handleIntervalClick(e.target); }
-        }, {passive: false});
+        const handleIntervalEvent = (e) => {
+            if (e.target.tagName === 'A') { 
+                e.preventDefault(); e.stopPropagation(); handleIntervalClick(e.target); 
+            }
+        };
+        extraLinks.addEventListener('touchstart', handleIntervalEvent, {passive: false});
+        extraLinks.addEventListener('mousedown', handleIntervalEvent);
 
         document.querySelectorAll('.btn-key').forEach(btn => {
             btn.onclick = (e) => {
@@ -387,7 +578,6 @@
                 const r = await apiFetch('/api/info');
                 const d = await r.json();
                 screenWidth = d.width; screenHeight = d.height;
-                resInfo.innerText = `${screenWidth}x${screenHeight}`;
                 scale = viewport.clientWidth / screenWidth; updateTransform();
             } catch (e) {}
         }
@@ -406,15 +596,53 @@
         }
         function refreshFrame() {
             if (isStopped) return;
+            clearTimeout(refreshTimeout);
             const s = Date.now();
-            const n = new Image();
-            n.src = `/api/screenshot?t=${s}${accessToken ? '&token='+accessToken : ''}`;
-            n.onload = () => {
-                if (isStopped) return; img.src = n.src; lastUpdateTimestamp = Date.now(); updateMouse();
-                document.querySelectorAll('.btn-pending').forEach(b => b.classList.remove('btn-pending'));
-                refreshTimeout = setTimeout(refreshFrame, Math.max(50, refreshInterval - (Date.now() - s)));
-            };
-            n.onerror = () => { if (!isStopped) setTimeout(refreshFrame, 200); };
+            
+            const q = document.getElementById('select-quality').value;
+            let url = `/api/screenshot?t=${s}${accessToken ? '&token='+accessToken : ''}&q=${q}`;
+            if (currentRegion) {
+                url += `&x=${currentRegion.x}&y=${currentRegion.y}&w=${currentRegion.w}&h=${currentRegion.h}`;
+            }
+
+            const target = currentRegion ? regionOverlay : img;
+            
+            apiFetch(url).then(async r => {
+                if (!r.ok) throw new Error('Fetch failed');
+                const blob = await r.blob();
+                totalBytes += blob.size;
+                
+                if (totalBytes > 1024 * 1024) {
+                    resInfo.innerText = `${(totalBytes / (1024 * 1024)).toFixed(2)} MB`;
+                } else {
+                    resInfo.innerText = `${(totalBytes / 1024).toFixed(1)} KB`;
+                }
+                
+                const blobUrl = URL.createObjectURL(blob);
+                const oldUrl = target.src;
+                target.src = blobUrl;
+                
+                target.onload = () => {
+                    if (oldUrl.startsWith('blob:')) URL.revokeObjectURL(oldUrl);
+                    if (isStopped) return;
+                    
+                    lastUpdateTimestamp = Date.now();
+                    updateMouse();
+                    
+                    if (currentRegion) {
+                        regionOverlay.style.display = 'block';
+                    } else {
+                        regionOverlay.style.display = 'none';
+                    }
+
+                    document.querySelectorAll('.btn-pending').forEach(b => b.classList.remove('btn-pending'));
+                    const delay = Math.max(50, refreshInterval - (Date.now() - s));
+                    refreshTimeout = setTimeout(refreshFrame, delay);
+                };
+            }).catch(err => {
+                console.warn('Screenshot fetch error:', err);
+                if (!isStopped) refreshTimeout = setTimeout(refreshFrame, 500);
+            });
         }
 
         img.addEventListener('touchstart', (e) => { 
