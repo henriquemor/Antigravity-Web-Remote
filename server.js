@@ -789,31 +789,32 @@ async function main() {
         const cascade = cascades.get(req.query.cascadeId) || Array.from(cascades.values())[0];
         const projectPath = req.query.path || cascade?.projectRoot || REPO_ROOT;
         const file = req.query.file;
+        const isStaged = req.query.staged === 'true'; // Novo filtro via URL
+        
         try {
             let diff = '';
             if (file) {
-                // Try normal diff
-                diff = execSync(`git diff "${file}"`, { cwd: projectPath }).toString();
-                
-                // If unset, try staged diff
-                if (!diff) {
+                if (isStaged) {
+                    // Force strictly Staged diff mode
                     try {
-                         const staged = execSync(`git diff --staged "${file}"`, { cwd: projectPath }).toString();
-                         if (staged) diff = staged;
+                         diff = execSync(`git diff --staged "${file}"`, { cwd: projectPath }).toString();
                     } catch (e) {}
-                }
-
-                // If empty, check if it's an untracked file
-                if (!diff) {
-                    try {
-                        const status = execSync(`git status --short "${file}"`, { cwd: projectPath }).toString();
-                        if (status.startsWith('??')) {
-                            const fullPath = join(projectPath, file);
-                            const content = fs.readFileSync(fullPath, 'utf8');
-                            diff = `--- /dev/null\n+++ b/${file}\n@@ -0,0 +1,${content.split('\n').length} @@\n` + 
-                                   content.split('\n').map(l => '+' + l).join('\n');
-                        }
-                    } catch (e2) {}
+                } else {
+                    // Strictly Working Tree mode (Changed files)
+                    diff = execSync(`git diff "${file}"`, { cwd: projectPath }).toString();
+                    
+                    // If empty, check if it's an untracked file (which usually applies only to Working Tree side)
+                    if (!diff) {
+                        try {
+                            const status = execSync(`git status --short "${file}"`, { cwd: projectPath }).toString();
+                            if (status.startsWith('??')) {
+                                const fullPath = join(projectPath, file);
+                                const content = fs.readFileSync(fullPath, 'utf8');
+                                diff = `--- /dev/null\n+++ b/${file}\n@@ -0,0 +1,${content.split('\n').length} @@\n` + 
+                                       content.split('\n').map(l => '+' + l).join('\n');
+                            }
+                        } catch (e2) {}
+                    }
                 }
             } else {
                 diff = execSync('git diff', { cwd: projectPath }).toString();

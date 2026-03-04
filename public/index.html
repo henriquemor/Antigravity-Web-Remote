@@ -66,7 +66,7 @@
         .app-header {
             display: flex;
             align-items: center;
-            background: #0000002c; /* Sleek dark background */
+            background: #191919; 
             justify-content: space-between;
             position: sticky;
             top: 0;
@@ -1365,6 +1365,8 @@
                         </div>
                         <div style="margin-bottom:10px; font-family:monospace; color:#ccc;">${file}</div>
                     ` + html;
+                } else {
+                    contentEl.innerHTML = '<div style="color:#9ca3af; padding: 20px; text-align:center;">No direct text differences found (might be binary, empty, or line-endings only).</div>';
                 }
             } catch(e) {
                 contentEl.innerHTML = `<div style="color:#ef4444">${e.message}</div>`;
@@ -1409,6 +1411,7 @@
             listEl.innerHTML = '<div class="loading">Checking git...</div>';
             contentEl.innerHTML = '';
             contentEl.dataset.currentFile = ''; // Reset current file on status reload
+            contentEl.dataset.currentStaged = ''; // Reset current staged status
 
             try {
                 const root = await getProjectRoot();
@@ -1423,46 +1426,76 @@
                 if (!data.status || data.status === 'No changes') {
                     listEl.innerHTML = '<div style="color:#9ca3af; padding: 20px; text-align:center;">No changes detected.</div>';
                     // Load full diff anyway just in case
-                    loadGitDiff('', path);
+                    loadGitDiff('', path, false);
                     return;
                 }
 
-                let hasStaged = false;
                 const lines = data.status.split('\n').filter(l => l.length > 3);
-                listEl.innerHTML = lines.map(line => {
-                    let status = line.slice(0, 2).trim();
+                
+                let stagedHtml = '';
+                let changedHtml = '';
+                let hasStaged = false;
+
+                lines.forEach(line => {
+                    const statusVal = line.slice(0, 2);
                     const file = line.substring(3).trim();
                     
-                    const isStaged = line.startsWith('M ') || line.startsWith('A ') || line.startsWith('D ');
-                    const isUntracked = line.startsWith('??');
-                    
-                    if (isStaged) hasStaged = true;
+                    const indexStatus = statusVal[0];   // Staged status
+                    const workTreeStatus = statusVal[1]; // Unstaged status
 
-                    return `
-                        <div class="file-list-item" onclick="loadGitDiff('${file}', '${path}')">
-                            <span class="file-status status-${status || 'untracked'}">${status || '??'}</span>
-                            ${isStaged ? '<span class="status-staged">Staged</span>' : ''}
-                            <span style="flex:1">${file}</span>
-                            <div class="file-actions">
-                                <button class="action-btn" onclick="openEditor(event, '${file}', '${path}')">Edit</button>
-                                ${isStaged ? 
-                                    `<button class="action-btn unstage" onclick="unstageFile(event, '${file}', '${path}')">Unstage</button>` :
-                                    `<button class="action-btn stage" onclick="stageFile(event, '${file}', '${path}')">Stage</button>`
-                                }
+                    // 1. Is it staged? (Index has modification, addition, deletion, etc.)
+                    if (indexStatus !== ' ' && indexStatus !== '?') {
+                        hasStaged = true;
+                        stagedHtml += `
+                            <div class="file-list-item" onclick="loadGitDiff('${file}', '${path}', true)">
+                                <span class="file-status status-${indexStatus}">${indexStatus}</span>
+                                <span style="flex:1">${file}</span>
+                                <div class="file-actions">
+                                    <button class="action-btn" onclick="openEditor(event, '${file}', '${path}')">Edit</button>
+                                    <button class="action-btn unstage" onclick="unstageFile(event, '${file}', '${path}')">Unstage</button>
+                                </div>
                             </div>
-                        </div>
-                    `;
-                }).join('');
+                        `;
+                    }
+                    
+                    // 2. Is it unstaged/changed? (Working tree has modification, deletion, or untracked)
+                    if (workTreeStatus !== ' ' || statusVal === '??') {
+                        const displayStatus = statusVal === '??' ? 'U' : workTreeStatus;
+                        changedHtml += `
+                            <div class="file-list-item" onclick="loadGitDiff('${file}', '${path}', false)">
+                                <span class="file-status status-${displayStatus || 'untracked'}">${displayStatus}</span>
+                                <span style="flex:1">${file}</span>
+                                <div class="file-actions">
+                                    <button class="action-btn" onclick="openEditor(event, '${file}', '${path}')">Edit</button>
+                                    <button class="action-btn stage" onclick="stageFile(event, '${file}', '${path}')">Stage</button>
+                                </div>
+                            </div>
+                        `;
+                    }
+                });
 
+                let finalHtml = '';
+                if (stagedHtml) {
+                    finalHtml += `<div style="font-size: 11px; font-weight: 600; color: #888; text-transform: uppercase; margin: 10px 0 4px 8px;">Staged Changes</div>`;
+                    finalHtml += stagedHtml;
+                }
+                if (changedHtml) {
+                    finalHtml += `<div style="font-size: 11px; font-weight: 600; color: #888; text-transform: uppercase; margin: 10px 0 4px 8px;">Changes</div>`;
+                    finalHtml += changedHtml;
+                }
+
+                // Show commit section only if there are staged changes
                 const commitSection = document.getElementById('commitSection');
                 commitSection.style.display = hasStaged ? 'flex' : 'none';
 
-                listEl.innerHTML += `
-                    <div class="file-list-item" onclick="loadGitDiff('', '${path}')" style="font-weight:bold; border-top: 1px solid #444; margin-top: 4px; padding-top: 12px; color: #60a5fa;">
-                        <span class="file-status">Σ</span>
-                        <span>Show All Changes</span>
+                finalHtml += `
+                    <div class="file-list-item" onclick="loadGitDiff('', '${path}', false)" style="font-weight:bold; border-top: 1px solid #333; margin-top: 12px; padding-top: 12px; color: #60a5fa; justify-content: center;">
+                        <span>Show All Changes Diff</span>
                     </div>
                 `;
+                
+                listEl.innerHTML = finalHtml;
+
             } catch (e) {
                 listEl.innerHTML = `<div style="color:#ef4444">Failed: ${e.message}</div>`;
             }
@@ -1484,28 +1517,25 @@
             }
         }
 
-        async function loadGitDiff(file, path) {
+        async function loadGitDiff(file, path, isStaged = false) {
             const contentEl = document.getElementById('gitContent');
             
             // Check if we are toggling closure
-            if (contentEl.dataset.currentFile === file && contentEl.style.display !== 'none') {
-                 contentEl.style.display = 'none';
-                 contentEl.dataset.currentFile = '';
-                 // Optional: clear selection styling
-                 const listEl = document.getElementById('gitFileList');
-                 Array.from(listEl.querySelectorAll('.file-list-item')).forEach(el => el.classList.remove('selected'));
-                 return;
+            if (contentEl.dataset.currentFile === file && contentEl.dataset.currentStaged === String(isStaged)) {
+                contentEl.innerHTML = '';
+                contentEl.dataset.currentFile = '';
+                contentEl.dataset.currentStaged = '';
+                return;
             }
             
-            contentEl.style.display = 'block';
             contentEl.dataset.currentFile = file;
-
+            contentEl.dataset.currentStaged = String(isStaged);
+            
             contentEl.innerHTML = '<div class="loading">Loading diff...</div>';
-
+            
             try {
                 const root = await getProjectRoot();
-                const url = `/git/diff?path=${encodeURIComponent(root)}&file=${encodeURIComponent(file)}&cascadeId=${getActiveId()}`;
-                const res = await fetch(url);
+                const res = await fetch(`/git/diff?file=${encodeURIComponent(file)}&path=${encodeURIComponent(root)}&cascadeId=${getActiveId()}&staged=${isStaged}`);
                 const data = await res.json();
 
                 if (data.error) {
