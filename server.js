@@ -340,6 +340,8 @@ async function captureCSS(cdp) {
                     // This prevents the monitored app's global backgrounds from overriding our monitor's body
                     text = text.replace(/(^|[\\s,}])body(?=[\\s,{])/gi, '$1#cascade');
                     text = text.replace(/(^|[\\s,}])html(?=[\\s,{])/gi, '$1#cascade');
+                    
+                    
                     css += text + '\\n'; 
                 }
             } catch (e) { }
@@ -415,6 +417,14 @@ async function captureHTML(cdp) {
                     // Optional: highlight slightly to show it's interactive
                     // cloneButtons[i].style.outline = '1px dashed rgba(255,255,255,0.1)';
                 }
+            }
+        });
+
+        // Fix image sources for local VS Code resources
+        clone.querySelectorAll('img').forEach(img => {
+            const src = img.getAttribute('src');
+            if (src && src.startsWith('/') && src.includes(':/')) {
+                img.setAttribute('src', '/file-code.svg');
             }
         });
 
