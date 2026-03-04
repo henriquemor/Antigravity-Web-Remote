@@ -20,6 +20,7 @@ import {
     spawn
 } from 'child_process';
 import fs from 'fs';
+import { attachRemote } from './remote-server.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -269,7 +270,8 @@ async function connectCDP(url) {
 async function extractMetadata(cdp) {
     const SCRIPT = `(() => {
         // Try multiple ways to find the chat
-        const cascade = document.getElementById('cascade') || 
+        const cascade = document.querySelector('.antigravity-agent-side-panel') ||
+                        document.getElementById('cascade') || 
                         document.getElementById('chat') ||
                         document.querySelector('[id*="cascade"]') || 
                         document.querySelector('[class*="chat-messages"]') ||
@@ -277,21 +279,25 @@ async function extractMetadata(cdp) {
         
         if (!cascade) return { found: false };
         
-        let chatTitle = null;
-        const possibleTitleSelectors = ['h1', 'h2', 'header', '[class*="title"]'];
-        for (const sel of possibleTitleSelectors) {
-            try {
-                const el = document.querySelector(sel);
-                if (el && el.textContent.length > 2 && el.textContent.length < 50) {
-                    chatTitle = el.textContent.trim();
-                    break;
-                }
-            } catch(e) {}
+        let chatTitle = 'Agent';
+        if (document.title && document.title.includes('Antigravity')) {
+            chatTitle = document.title.split(' - ')[0].trim();
+        } else {
+            const possibleTitleSelectors = ['h1', 'h2', 'header', '[class*="title"]'];
+            for (const sel of possibleTitleSelectors) {
+                try {
+                    const el = document.querySelector(sel);
+                    if (el && el.textContent.length > 2 && el.textContent.length < 50) {
+                        chatTitle = el.textContent.trim();
+                        break;
+                    }
+                } catch(e) {}
+            }
         }
         
         return {
             found: true,
-            chatTitle: chatTitle || 'Agent',
+            chatTitle: chatTitle,
             isActive: document.hasFocus()
         };
     })()`;
@@ -358,7 +364,8 @@ async function captureCSS(cdp) {
 
 async function captureHTML(cdp) {
     const SCRIPT = `(() => {
-        const cascade = document.getElementById('cascade') || 
+        const cascade = document.querySelector('.antigravity-agent-side-panel') ||
+                        document.getElementById('cascade') || 
                         document.getElementById('chat') ||
                         document.querySelector('[id*="cascade"]') || 
                         document.querySelector('[class*="chat-messages"]') ||
@@ -429,7 +436,8 @@ async function captureHTML(cdp) {
         });
 
         // Neutralize ALL virtualization spacers and fixed-height containers
-        clone.querySelectorAll('*').forEach(el => {
+        const elementsToClean = [clone, ...clone.querySelectorAll('*')];
+        elementsToClean.forEach(el => {
             const style = el.getAttribute('style') || '';
             
             // 1. Force heights to auto for containers
@@ -452,6 +460,15 @@ async function captureHTML(cdp) {
             // 3. Prevent clipping/scrolling inside the chat part
             if (style.includes('overflow:')) {
                 el.style.overflow = 'visible';
+            }
+
+            // Clean up the main panel wrapper itself if it has absolute inline positioning from VS Code
+            if (el.classList.contains('antigravity-agent-side-panel') || el === clone) {
+                el.style.left = '0px';
+                el.style.top = '0px';
+                el.style.width = '100%';
+                el.style.position = 'relative';
+                el.style.transform = 'none';
             }
 
             // 4. Aggressively remove known empty artifacts (Tailwind/Monaco)
@@ -1182,6 +1199,25 @@ async function main() {
     });
 
     const PORT = process.env.PORT || 3000;
+    
+    // Parse args for PIN security (same as original remote logic)
+    const args = process.argv.slice(2);
+    let accessToken = null;
+    if (!args.includes('nopin')) {
+        if (args.includes('pin')) {
+            const pinIndex = args.indexOf('pin');
+            accessToken = args[pinIndex + 1] || null;
+        } else {
+            // Since we are running async/server logic, blocking prompt might be tricky here, 
+            // defaulting to "1234" or null depending on your preference. 
+            // For headless start, let's leave unprotected if no arg is given (or require it explicitly).
+            accessToken = process.env.PIN || null;
+        }
+    }
+
+    // Attach Remote Screen API and WS to the same App/WSS
+    attachRemote(app, wss, accessToken);
+
     server.listen(PORT, '0.0.0.0', () => {
         console.log(`🚀 Server running on port ${PORT}`);
     });

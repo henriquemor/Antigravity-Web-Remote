@@ -13,13 +13,9 @@ const app = express();
 
 let ACCESS_TOKEN = null;
 
-const startServer = () => {
-    app.use(express.json({ limit: '10mb' }));
-    app.use(express.static('public'));
+export const attachRemote = (app, wss, accessToken = null) => {
+    ACCESS_TOKEN = accessToken;
 
-    // ... (rest of the auth logic remains the same)
-
-    let typingQueue = [];
     let isTyping = false;
 
     async function processTypingQueue() {
@@ -266,48 +262,29 @@ const startServer = () => {
         }
     });
 
-    const PORT = 3001;
-    const server = http.createServer(app);
-    const wss = new WebSocketServer({ server });
-
     wss.on('connection', (ws) => {
         ws.on('message', async (data) => {
             try {
-                const msg = JSON.parse(data);
-                if (ACCESS_TOKEN && msg.token !== ACCESS_TOKEN) {
-                    return ws.send(JSON.stringify({ error: '401' }));
-                }
+                // Ignore non-json or other messages
+                let msg;
+                try {
+                    msg = JSON.parse(data);
+                } catch(e) { return; }
 
                 if (msg.type === 'request_frame') {
+                    if (ACCESS_TOKEN && msg.token !== ACCESS_TOKEN) {
+                        return ws.send(JSON.stringify({ error: '401' }));
+                    }
                     const img = await getProcessedScreenshot(msg.params || {});
                     ws.send(img); // Binary send
                 }
             } catch (e) {
-                console.error('WS Error:', e.message);
+                console.error('WS Capture Error:', e.message);
             }
         });
     });
 
-    server.listen(PORT, '0.0.0.0', () => {
-        console.log(`🚀 Running at: http://localhost:${PORT}/remote.html`);
-        if (ACCESS_TOKEN) console.log(`🔐 PROTECTED with PIN: ${ACCESS_TOKEN}`);
-        else console.log(`🔓 UNPROTECTED (No PIN)`);
-    });
+    console.log(`📡 Remote Screen Interface Attached!`);
+    if (ACCESS_TOKEN) console.log(`🔐 REMOTE VIEW PROTECTED with PIN: ${ACCESS_TOKEN}`);
+    else console.log(`🔓 REMOTE VIEW UNPROTECTED (No PIN)`);
 };
-
-const args = process.argv.slice(2);
-if (args.includes('nopin')) {
-    ACCESS_TOKEN = null;
-    startServer();
-} else if (args.includes('pin')) {
-    const pinIndex = args.indexOf('pin');
-    ACCESS_TOKEN = args[pinIndex + 1] || null;
-    startServer();
-} else {
-    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-    rl.question('Set a PIN for access (leave blank for NO PIN): ', (answer) => {
-        ACCESS_TOKEN = answer.trim() || null;
-        rl.close();
-        startServer();
-    });
-}

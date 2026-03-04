@@ -66,70 +66,95 @@
         .app-header {
             display: flex;
             align-items: center;
-            background: #2a2a2a;
-            border-bottom: 1px solid #3a3a3a;
+            background: #0000002c; /* Sleek dark background */
             justify-content: space-between;
             position: sticky;
             top: 0;
             z-index: 2000;
+            padding: 5px 16px;
+            gap: 12px;
+        }
+        
+        /* Modern Select Components */
+        .modern-select-wrapper {
+            position: relative;
+            display: flex;
+            align-items: center;
+            background: #121212;
+            border: none;
+            border-radius: 4px;
+            height: 32px;
+            padding: 0 3px;
+            flex: 1;
+            min-width: 0;
+        }
+        
+        .modern-select-wrapper.compact {
+            flex: initial;
+            background: #121212;
         }
 
-        .headers-container {
-            background: #2a2a2a !important;
-            border-bottom: 1px solid transparent !important;
-            position: relative;
-            z-index: 100;
-            display: flex;
-            flex: 1;
-            overflow-x: auto;
+        .modern-select {
+            appearance: none;
+            -webkit-appearance: none;
+            display: inline-block;
+            padding: 4px 24px 3px 5px; /* space for arrow */
+            margin: 0;
+            font: inherit;
+            outline: none !important;
+            box-shadow: none !important;
+            line-height: 1.2;
+            background: #121212;
+            color: white;
+            border: 0;
+            width: 100%;
+            text-overflow: ellipsis;
             white-space: nowrap;
-            -webkit-overflow-scrolling: touch;
+            overflow: hidden;
+            cursor: pointer;
+        }
+        
+        .modern-select.primary {
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .modern-select option {
+            background: #121212;
+            color: white;
+            border: none;
+            outline: none;
+            box-shadow: none;
+        }
+        .modern-select select {
+            border: none;
+            outline: none;
+            box-shadow: none;
+        }
+
+        /* SVG Arrow Down to replace native appearance */
+        .modern-select-arrow {
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            pointer-events: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #888;
+        }
+        .modern-select-arrow svg {
+            width: 14px;
+            height: 14px;
+            fill: currentColor;
         }
         
         .project-context {
-            padding: 0 16px;
-            font-size: 11px;
-            color: #888;
-            font-weight: 500;
-            border-left: 1px solid #3a3a3a;
-            height: 100%;
             display: flex;
             align-items: center;
-            white-space: nowrap;
-            background: #252525;
-            border-bottom: 2px solid transparent;
-            transition: border-color 0.3s;
-        }
-        
-        .context-label {
-            color: #3b82f6;
-            margin-right: 4px;
-            font-size: 10px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-        
-        .context-name {
-            color: #ddd;
-            font-weight: 600;
-        }
-
-        #projectContextSelector {
-            background: transparent;
-            border: none;
-            color: #ddd;
-            font-family: inherit;
-            font-size: 11px;
-            font-weight: 600;
-            cursor: pointer;
-            outline: none;
-            padding: 0;
-            appearance: none;
-        }
-        
-        #projectContextSelector option {
-            background: #2a2a2a;
-            color: #fff;
+            flex: 1;
+            max-width: 200px; /* Prevents right side from taking over on mobile */
         }
 
         .cascade-tab {
@@ -211,14 +236,26 @@
 
         textarea {
             flex: 1;
-            background: #1a1a1a;
-            border: 1px solid #3a3a3a;
+            background: #0a0a0a;
+            border: 1px solid #1a1a1a;
             color: white;
             padding: 10px !important;
             border-radius: 6px;
             resize: none;
             height: 100px;
             font-size: 13px;
+            transition: background-color 0.2s;
+            outline: none !important;
+            box-shadow: none !important;
+            -webkit-appearance: none;
+            appearance: none;
+        }
+
+        textarea:focus {
+            border: 1px solid #222 !important;
+            background: #111;
+            outline: none !important;
+            box-shadow: none !important;
         }
 
         .prose {
@@ -227,11 +264,25 @@
 
         button {
             padding: 0 20px;
-            background: #3b82f6;
+            background: #1b4b27; /* Very muted deep green */
             border: none;
-            color: white;
+            color: #c9d1d9;
             border-radius: 6px;
             font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            outline: none !important;
+            box-shadow: none !important;
+        }
+
+        button:hover {
+            background: #236531;
+            color: #ffffff;
+        }
+
+        button:focus, button:active {
+            outline: none !important;
+            box-shadow: none !important;
         }
 
         .loading {
@@ -665,15 +716,34 @@
 <body>
 
     <div class="app-header">
-        <div class="headers-container" id="tabsContainer">
-            <!-- Tabs injected here -->
-            <div class="cascade-tab">Loading...</div>
+        <!-- Target Chat Selector -->
+        <div class="modern-select-wrapper" style="flex: 1.5; max-width: 250px;">
+            <select id="cascadeSelector" class="modern-select primary" onchange="selectCascade(this.value)">
+                <option value="">Loading Chats...</option>
+            </select>
+            <div class="modern-select-arrow">
+                <svg viewBox="0 0 24 24"><path d="M7 10l5 5 5-5z"></path></svg>
+            </div>
         </div>
-        <div class="project-context" id="projectContext" onclick="document.getElementById('projectContextSelector').focus()">
-            <span class="context-label"></span>
-            <select id="projectContextSelector" onchange="manualContextChange(this.value)">
+        
+        <!-- View Mode Selector -->
+        <div id="tabsContainer" class="modern-select-wrapper compact">
+            <select id="viewSelector" class="modern-select" onchange="switchView(this.value)">
+                <option value="CHAT_VIEW">Chat</option>
+            </select>
+            <div class="modern-select-arrow" style="right: 4px;">
+                <svg viewBox="0 0 24 24"><path d="M7 10l5 5 5-5z"></path></svg>
+            </div>
+        </div>
+        
+        <!-- Project Root Context -->
+        <div class="modern-select-wrapper project-context" id="projectContext" onclick="document.getElementById('projectContextSelector').focus()">
+            <select id="projectContextSelector" class="modern-select" onchange="manualContextChange(this.value)">
                 <option value="">None</option>
             </select>
+            <div class="modern-select-arrow">
+                <svg viewBox="0 0 24 24"><path d="M7 10l5 5 5-5z"></path></svg>
+            </div>
         </div>
     </div>
 
@@ -852,78 +922,37 @@
         }
 
         function renderTabs() {
-            // Pre-calculate colors for roots
-            const roots = [...new Set(cascades.map(c => c.projectRoot).filter(Boolean))];
-            const rootColors = {};
-            // Distinct semi-transparent background colors
-            const bgColors = [
-                'rgba(59, 130, 246, 0.15)', // Blue
-                'rgba(16, 185, 129, 0.15)', // Green
-                'rgba(245, 158, 11, 0.15)', // Amber
-                'rgba(239, 68, 68, 0.15)',  // Red
-                'rgba(139, 92, 246, 0.15)', // Violet
-                'rgba(236, 72, 153, 0.15)', // Pink
-                'rgba(6, 182, 212, 0.15)'   // Cyan
-            ];
-            const borderColors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4'];
-            
-            roots.forEach((r, i) => {
-                rootColors[r] = {
-                    bg: bgColors[i % bgColors.length],
-                    border: borderColors[i % borderColors.length]
-                };
-            });
-
-            const cascadeTabs = cascades.map(c => {
-                const colorSet = rootColors[c.projectRoot] || { bg: 'transparent', border: 'transparent' };
-                const isActive = c.id === currentCascadeId;
-                const style = `
-                    background: ${isActive ? colorSet.bg.replace('0.15', '0.4') : colorSet.bg};
-                    border-bottom: 2px solid ${colorSet.border};
-                    opacity: ${isActive ? '1' : '0.8'};
-                `;
-                return `
-                    <div class="cascade-tab ${c.active ? 'active-window' : ''}" 
-                         style="${style}"
-                         onclick="selectCascade('${c.id}')">
-                        ${c.title || 'Untitled'}
-                    </div>
-                `;
-            }).join('');
-
-            const explorerTab = `
-                <div class="cascade-tab ${currentCascadeId === 'EXPLORER_VIEW' ? 'active' : ''}" 
-                     onclick="selectExplorerTab()">
-                    Explorer
-                </div>
-            `;
-
-            const changesTab = `
-                <div class="cascade-tab ${currentCascadeId === 'DIFF_VIEW' ? 'active' : ''}" 
-                     onclick="selectDiffTab()">
-                    Changes
-                </div>
-            `;
-
-            const gitTab = `
-                <div class="cascade-tab ${currentCascadeId === 'GIT_HISTORY_VIEW' ? 'active' : ''}" 
-                     onclick="selectGitTab()">
-                    Git
-                </div>
-            `;
-
-            const terminalTab = `
-                <div class="cascade-tab ${currentCascadeId === 'TERMINAL_VIEW' ? 'active' : ''}" 
-                     onclick="selectTerminalTab()">
-                    Terminal
-                </div>
-            `;
-
-            tabsContainer.innerHTML = cascadeTabs + explorerTab + changesTab + gitTab + terminalTab;
-
-            if (cascades.length === 0 && currentCascadeId !== 'DIFF_VIEW' && currentCascadeId !== 'EXPLORER_VIEW' && currentCascadeId !== 'GIT_HISTORY_VIEW' && currentCascadeId !== 'TERMINAL_VIEW') {
-                tabsContainer.innerHTML = '<div class="cascade-tab">No chats found</div>' + explorerTab + changesTab + gitTab + terminalTab;
+            const selector = document.getElementById('cascadeSelector');
+            if (cascades.length === 0) {
+                selector.innerHTML = '<option value="">No chats found</option>';
+            } else {
+                selector.innerHTML = cascades.map(c => `
+                    <option value="${c.id}" ${c.id === currentCascadeId ? 'selected' : ''}>
+                        ${c.title || 'Untitled'} ${c.active ? ' (Active)' : ''}
+                    </option>
+                `).join('');
+                
+                if (cascades.find(c => c.id === currentCascadeId)) {
+                    selector.value = currentCascadeId;
+                } else if (lastActiveCascadeId && cascades.find(c => c.id === lastActiveCascadeId)) {
+                    selector.value = lastActiveCascadeId;
+                }
             }
+
+            tabsContainer.innerHTML = `
+                <select id="viewSelector" class="modern-select" onchange="switchView(this.value)">
+                    <option value="CHAT_VIEW" ${!['EXPLORER_VIEW', 'DIFF_VIEW', 'GIT_HISTORY_VIEW', 'TERMINAL_VIEW'].includes(currentCascadeId) ? 'selected' : ''}>Chat</option>
+                    <option value="EXPLORER_VIEW" ${currentCascadeId === 'EXPLORER_VIEW' ? 'selected' : ''}>Explorer</option>
+                    <option value="DIFF_VIEW" ${currentCascadeId === 'DIFF_VIEW' ? 'selected' : ''}>Changes</option>
+                    <option value="GIT_HISTORY_VIEW" ${currentCascadeId === 'GIT_HISTORY_VIEW' ? 'selected' : ''}>Git History</option>
+                    <option value="TERMINAL_VIEW" ${currentCascadeId === 'TERMINAL_VIEW' ? 'selected' : ''}>Terminal</option>
+                    <option value="REMOTE_VIEW">📱 Remote Screen</option>
+                </select>
+                <div class="modern-select-arrow" style="right: 4px;">
+                    <svg viewBox="0 0 24 24"><path d="M7 10l5 5 5-5z"></path></svg>
+                </div>
+            `;
+
             updateProjectContext();
         }
 
@@ -959,11 +988,10 @@
 
             if (selectedManualContext) {
                 const rootIndex = allPossibleRoots.indexOf(selectedManualContext);
-                const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4'];
-                const activeColor = rootIndex !== -1 ? colors[rootIndex % colors.length] : '#3b82f6';
+                const colors = ['#007acc', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4'];
+                const activeColor = rootIndex !== -1 ? colors[rootIndex % colors.length] : '#007acc';
                 
                 document.getElementById('projectContext').style.borderColor = activeColor;
-                document.querySelector('.context-label').style.color = activeColor;
             }
         }
 
@@ -981,6 +1009,38 @@
             }
         }
 
+        function switchView(view) {
+            if (view === 'REMOTE_VIEW') {
+                window.open('/remote.html', '_blank');
+                // Revert selected option visually right after popup
+                const selector = document.getElementById('viewSelector');
+                if (selector) {
+                    if (['EXPLORER_VIEW', 'DIFF_VIEW', 'GIT_HISTORY_VIEW', 'TERMINAL_VIEW'].includes(currentCascadeId)) {
+                        selector.value = currentCascadeId;
+                    } else {
+                        selector.value = 'CHAT_VIEW';
+                    }
+                }
+                return;
+            }
+
+            if (view === 'CHAT_VIEW') {
+                if (lastActiveCascadeId && cascades.find(c => c.id === lastActiveCascadeId)) {
+                    selectCascade(lastActiveCascadeId);
+                } else if (cascades.length > 0) {
+                    selectCascade(cascades[0].id);
+                }
+            } else if (view === 'EXPLORER_VIEW') {
+                selectExplorerTab();
+            } else if (view === 'DIFF_VIEW') {
+                selectDiffTab();
+            } else if (view === 'GIT_HISTORY_VIEW') {
+                selectGitTab();
+            } else if (view === 'TERMINAL_VIEW') {
+                selectTerminalTab();
+            }
+        }
+
         function selectCascade(id) {
             currentCascadeId = id;
             lastActiveCascadeId = id;
@@ -990,6 +1050,13 @@
             document.getElementById('gitHistoryView').style.display = 'none';
             document.getElementById('terminalView').style.display = 'none';
             document.querySelector('.input-section').style.display = 'flex';
+            
+            // Sync context automatically
+            const cascade = cascades.find(c => c.id === id);
+            if (cascade && cascade.projectRoot && cascade.projectRoot !== selectedManualContext) {
+                selectedManualContext = cascade.projectRoot;
+            }
+
             renderTabs();
             loadCascade(id);
         }

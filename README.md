@@ -52,8 +52,9 @@ antigravity * --remote-debugging-port=9000
 ### 3. Start the Server
 Run the Node.js server to start the web interface:
 ```bash
-node server.js
+node server.js pin 123
 ```
+The pin is optional for the remote jpg streaming interface, but it is recommended to use it to prevent unauthorized access from within your network.
 
 ### 4. Access the Interface
 Open your browser and navigate to:
