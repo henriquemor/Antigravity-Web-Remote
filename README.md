@@ -1,7 +1,7 @@
 # 🚀 Antigravity Web Remote
 
 <div align="center">
-  <img width="800" alt="screenshot" src="https://github.com/user-attachments/assets/95318065-d943-43f1-b05c-26fd7c0733dd" />
+  <img width="700" alt="screenshot" src="https://github.com/user-attachments/assets/a416cf52-9ac7-481e-bec4-9b3078652095" />
   
   <br>
   
@@ -29,7 +29,7 @@ This fork extends the original project from [lukasz-wronski antigravity-shit-cha
   - **Sync** (Pull/Push) with remote repositories
 - ✨ **UI**: typography and mobile optimizations.
 - 🖱️ **Clicking**: Click buttons in the chat interface remotely (via [sanderd fork](https://github.com/sanderd/Antigravity-Shit-Chat/tree/feature/remote-button-click))
-
+- 🖥️ Remote screen "streaming" and interactions. (mobile optimized only, for now)
 ---
 
 note: the code was tested only on a Windows machine.
