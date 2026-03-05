@@ -94,6 +94,25 @@
             background: #121212;
         }
 
+        .restart-btn {
+            background: transparent;
+            border: 1px solid #4a5568;
+            color: #a0aec0;
+            padding: 4px 8px;
+            font-size: 11px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        
+        .restart-btn:hover {
+            background: #2d3748;
+            color: #fff;
+        }
+
         .modern-select {
             appearance: none;
             -webkit-appearance: none;
@@ -157,6 +176,25 @@
             max-width: 200px; /* Prevents right side from taking over on mobile */
         }
 
+        .restart-btn {
+            background: transparent;
+            border: 1px solid #4a5568;
+            color: #a0aec0;
+            padding: 4px 8px;
+            font-size: 11px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        
+        .restart-btn:hover {
+            background: #2d3748;
+            color: #fff;
+        }
+        
         .cascade-tab {
             padding: 12px 16px;
             cursor: pointer;
@@ -745,6 +783,11 @@
                 <svg viewBox="0 0 24 24"><path d="M7 10l5 5 5-5z"></path></svg>
             </div>
         </div>
+
+        <button class="restart-btn" onclick="restartServer()" title="Restart Backend Server">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+            Restart
+        </button>
     </div>
 
     <div class="chat-container" id="chatContainer">
@@ -812,6 +855,7 @@
                     <div class="terminal-input-bar">
                         <input type="text" id="terminalInput1" placeholder="Type a command..." onkeydown="handleTerminalKey(event, '1')">
                         <button class="terminal-btn" onclick="sendTerminalCommand('1')">Send</button>
+                        <button class="terminal-btn" onclick="sendCtrlC('1')" style="color:#fbbf24; border-color:#78350f;">Ctrl+C</button>
                         <button class="terminal-btn stop" onclick="stopTerminal('1')">Stop</button>
                         <button class="terminal-btn" onclick="clearTerminal('1')">CLS</button>
                     </div>
@@ -823,6 +867,7 @@
                     <div class="terminal-input-bar">
                         <input type="text" id="terminalInput2" placeholder="Type a command..." onkeydown="handleTerminalKey(event, '2')">
                         <button class="terminal-btn" onclick="sendTerminalCommand('2')">Send</button>
+                        <button class="terminal-btn" onclick="sendCtrlC('2')" style="color:#fbbf24; border-color:#78350f;">Ctrl+C</button>
                         <button class="terminal-btn stop" onclick="stopTerminal('2')">Stop</button>
                         <button class="terminal-btn" onclick="clearTerminal('2')">CLS</button>
                     </div>
@@ -883,6 +928,11 @@
         function connect() {
             ws = new WebSocket(`ws://${location.host}`);
 
+            ws.onclose = () => {
+                showToast("Connection lost. Reconnecting...");
+                setTimeout(connect, 2000);
+            };
+
             ws.onmessage = (event) => {
                 const data = JSON.parse(event.data);
 
@@ -917,8 +967,21 @@
                     if (container) container.innerHTML = '';
                 }
             };
+        }
 
-            ws.onclose = () => setTimeout(connect, 2000);
+        async function restartServer() {
+            if (!confirm("Are you sure you want to restart the background server? The app will disconnect momentarily.")) return;
+            
+            try {
+                showToast("Restart signal sent...");
+                await fetch('/api/restart', { method: 'POST' });
+                // The WS onclose handler will show a message, and we'll reload after a delay
+                setTimeout(() => {
+                    location.reload();
+                }, 3000);
+            } catch(e) {
+                showToast("Failed to send restart signal: " + e.message, 4000);
+            }
         }
 
         function renderTabs() {
@@ -1011,8 +1074,8 @@
 
         function switchView(view) {
             if (view === 'REMOTE_VIEW') {
-                window.open('/remote.html', '_blank');
-                // Revert selected option visually right after popup
+                window.location.href = '/remote.html';
+                // Revert selected option visually right after popup (in case user comes back)
                 const selector = document.getElementById('viewSelector');
                 if (selector) {
                     if (['EXPLORER_VIEW', 'DIFF_VIEW', 'GIT_HISTORY_VIEW', 'TERMINAL_VIEW'].includes(currentCascadeId)) {
@@ -1201,6 +1264,20 @@
                     type: 'terminal:kill',
                     root,
                     id
+                }));
+            }
+        }
+
+        async function sendCtrlC(id) {
+            const root = selectedManualContext;
+            if (!root) return;
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                // '\\x03' is the ASCII End of Text character, corresponding to Control+C
+                ws.send(JSON.stringify({
+                    type: 'terminal:input',
+                    root,
+                    id,
+                    data: '\\x03'
                 }));
             }
         }
@@ -1737,7 +1814,7 @@
                         /* Specific fix for the input bottom div - Second div of #conversation */
                         #cascade #conversation > div:nth-child(2),
                         #conversation > div:nth-child(2) {
-                            height: 80px !important;
+                            height: 400px !important;
                             opacity: 0.5 !important;
                             margin-top: 3em;
                         }

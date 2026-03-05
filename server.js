@@ -378,7 +378,7 @@ async function captureHTML(cdp) {
         // Build a path for each button (without modifying original DOM)
         function getPath(el, root) {
             const path = [];
-            while (el && el !== root) {
+            while (el && el !== root && el !== document) {
                 const parent = el.parentElement;
                 if (!parent) break;
                 const idx = Array.from(parent.children).indexOf(el);
@@ -388,19 +388,20 @@ async function captureHTML(cdp) {
             return path;
         }
         
-        // Capture standard buttons AND clickable divs (Headless UI options often use divs with cursor-pointer)
-        const buttons = cascade.querySelectorAll('button, div[role="button"], div[role="option"], div.cursor-pointer');
+        const interactiveSelectors = 'button, div[role="button"], div[role="option"], div.cursor-pointer, .monaco-list-row, [role="menuitem"]';
+        const buttons = cascade.querySelectorAll(interactiveSelectors);
         const buttonMap = {};
         
         const clone = cascade.cloneNode(true);
-        // We must select from clone using same logic, but be careful of index alignment.
-        // querySelectorAll returns a static NodeList in order of document.
-        const cloneButtons = clone.querySelectorAll('button, div[role="button"], div[role="option"], div.cursor-pointer');
+        const cloneButtons = clone.querySelectorAll(interactiveSelectors);
+        
+        let btnIdx = 0;
         
         // Tag interactive elements in CLONE only
         buttons.forEach((btn, i) => {
-            const id = 'btn-' + i;
-            const path = getPath(btn, cascade);
+            const id = 'btn-' + btnIdx++;
+            // Calculate absolute path from document.body
+            const path = getPath(btn, document.body);
             // Store path and text for verification
             let text = btn.textContent.trim().slice(0, 50);
             if (!text && btn.getAttribute('aria-label')) text = btn.getAttribute('aria-label');
@@ -448,6 +449,37 @@ async function captureHTML(cdp) {
         // Neutralize ALL virtualization spacers and fixed-height containers
         const elementsToClean = [clone, ...clone.querySelectorAll('*')];
         elementsToClean.forEach(el => {
+            const cls = (el.className || '').toString().toLowerCase();
+            const id = (el.id || '').toString().toLowerCase();
+            const role = (el.getAttribute('role') || '').toString().toLowerCase();
+            
+            // Preserve headless UI / popovers
+            const isPopup = el.hasAttribute('data-radix-portal') ||
+                            el.hasAttribute('data-radix-popper-content-wrapper') ||
+                            cls.includes('radix') ||
+                            cls.includes('popover') ||
+                            cls.includes('portal') ||
+                            id.includes('portal') ||
+                            id.includes('radix') ||
+                            role === 'dialog' ||
+                            role === 'menu' ||
+                            role === 'listbox';
+
+            if (isPopup) {
+                // Ensure popups become relative and visible so they show up
+                // in the flow instead of being fixed off-screen.
+                el.style.position = 'relative'; 
+                el.style.display = 'block';
+                el.style.visibility = 'visible';
+                el.style.opacity = '1';
+                el.style.top = '0px';
+                el.style.left = '0px';
+                el.style.transform = 'none';
+                el.style.zIndex = '999999';
+                el.style.pointerEvents = 'auto'; // allow interaction
+                return;
+            }
+            
             const style = el.getAttribute('style') || '';
             
             // 1. Force heights to auto for containers
@@ -460,11 +492,13 @@ async function captureHTML(cdp) {
             // 2. Remove all positioning offsets, transforms, and clips
             // We force position relative to keep elements in flow
             if (style.includes('top:') || style.includes('transform:') || style.includes('position:') || style.includes('translate')) {
-                el.style.top = '0px';
-                el.style.bottom = 'auto';
-                el.style.transform = 'none';
-                el.style.position = 'relative';
-                el.style.display = 'block'; // Ensure they don't hide
+                if (!style.includes('z-index: 50') && !style.includes('z-index: 99')) {
+                    el.style.top = '0px';
+                    el.style.bottom = 'auto';
+                    el.style.transform = 'none';
+                    el.style.position = 'relative';
+                    el.style.display = 'block'; // Ensure they don't hide
+                }
             }
 
             // 3. Prevent clipping/scrolling inside the chat part
@@ -536,8 +570,65 @@ async function captureHTML(cdp) {
             bodyBg = containerStyles.backgroundColor;
         }
 
+        const htmlParts = [clone.outerHTML];
+        
+        // Secondary capture for Popups like context menus and select dropdowns natively from VS Code
+        // We look for any visible floating elements that are NOT the cascade container
+        const secondaries = [];
+        const floatingElements = Array.from(document.querySelectorAll(
+            '[role="dialog"], [role="menu"], [role="listbox"], [role="tooltip"], ' +
+            '.monaco-menu-container, .context-view, ' +
+            '[data-radix-portal], [id*="headlessui-portal"], [id*="portal"], [class*="portal"]'
+        ));
+        
+        floatingElements.forEach(el => {
+            if (cascade.contains(el) || el.contains(cascade) || !el.innerText.trim()) return;
+            
+            const style = window.getComputedStyle(el);
+            if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') return;
+            
+            if (secondaries.some(sec => sec.contains(el))) return;
+            
+            secondaries.push(el);
+        });
+
+        secondaries.forEach(secondary => {
+             const secBtns = secondary.querySelectorAll(interactiveSelectors);
+             const secClone = secondary.cloneNode(true);
+             const secCloneBtns = secClone.querySelectorAll(interactiveSelectors);
+             
+             secBtns.forEach((btn, i) => {
+                 const id = 'btn-' + btnIdx++;
+                 const path = getPath(btn, document.body); // from document.body
+                 let text = btn.textContent.trim().slice(0, 50);
+                 if (!text && btn.getAttribute('aria-label')) text = btn.getAttribute('aria-label');
+                 buttonMap[id] = { path, text };
+                 
+                 if (secCloneBtns[i]) {
+                     secCloneBtns[i].setAttribute('data-relay-id', id);
+                     secCloneBtns[i].style.cursor = 'pointer';
+                 }
+             });
+             
+             // Cleanup virtualization
+             secClone.querySelectorAll('.monaco-scrollable-element').forEach(el => el.style.height = 'auto');
+             
+             // Make sure it renders floating above everything in the remote web UI
+             secClone.style.position = 'absolute';
+             secClone.style.zIndex = '999999';
+             const rect = secondary.getBoundingClientRect();
+             secClone.style.left = rect.left + 'px';
+             secClone.style.top = rect.top + 'px';
+             secClone.style.margin = '0';
+             secClone.style.transform = 'none'; // reset so bounding rect coordinates align properly
+             secClone.style.background = 'var(--vscode-menu-background, #252526)';
+             secClone.style.border = '1px solid #454545';
+             
+             htmlParts.push(secClone.outerHTML);
+        });
+
         return {
-            html: clone.outerHTML,
+            html: htmlParts.join('\\n'),
             buttonMap: buttonMap,
             bodyBg: bodyBg,
             bodyColor: bodyStyles.color
@@ -708,6 +799,18 @@ async function main() {
     app.use(express.static(join(__dirname, 'public')));
 
     // API Routes
+    app.post('/api/restart', (req, res) => {
+        res.json({ message: 'Restarting server...' });
+        console.log('🔄 Restart signal received from web UI. Restarting process...');
+        setTimeout(() => {
+            const child = spawn(process.argv[0], process.argv.slice(1), {
+                detached: true,
+                stdio: 'ignore'
+            });
+            child.unref();
+            process.exit(0);
+        }, 500);
+    });
     app.get('/cascades', (req, res) => {
         res.json(Array.from(cascades.values()).map(c => ({
             id: c.id,
@@ -1321,13 +1424,9 @@ async function injectClick(cdp, path, expectedText) {
         const path = ${pathJson};
         const expectedText = '${escapedExpectedText}';
         
-        let el = document.getElementById('cascade') || 
-                 document.getElementById('chat') ||
-                 document.querySelector('[id*="cascade"]') || 
-                 document.querySelector('[class*="chat-messages"]') ||
-                 document.querySelector('.react-app-container');
+        let el = document.body;
 
-        if (!el) return { ok: false, reason: 'cascade not found' };
+        if (!el) return { ok: false, reason: 'body not found' };
         
         // Navigate the path
         for (const idx of path) {
@@ -1337,7 +1436,7 @@ async function injectClick(cdp, path, expectedText) {
             el = el.children[idx];
         }
         
-        if (el.tagName !== 'BUTTON' && el.tagName !== 'DIV' && el.tagName !== 'A' && el.tagName !== 'SPAN') {
+        if (!['BUTTON', 'DIV', 'A', 'SPAN'].includes(el.tagName)) {
             return { ok: false, reason: 'element is not interactive', tag: el.tagName };
         }
         

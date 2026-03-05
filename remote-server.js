@@ -251,7 +251,14 @@ export const attachRemote = (app, wss, accessToken = null) => {
         try {
             console.log(`Key tap: ${key}`);
             if (key) {
-                robot.keyTap(key, modifiers || []);
+                const mods = modifiers || [];
+                robot.keyTap(key, mods);
+                
+                // Forçar a liberação dos modificadores logo após o tap (bug comum do robotjs em alguns S.O.)
+                for (const mod of mods) {
+                    try { robot.keyToggle(mod, 'up'); } catch (e) {}
+                }
+                
                 res.json({ success: true });
             } else {
                 res.status(400).json({ error: 'Key required' });

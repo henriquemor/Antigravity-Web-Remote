@@ -183,6 +183,7 @@
             <button class="btn btn-key" data-key="enter">Ent</button>
             <button class="btn btn-key" data-key="tab">Tab</button>
             <button class="btn btn-key" data-key="escape">Esc</button>
+            <button class="btn btn-key" data-key="c" data-mod="control" style="color:#fbbf24; border-color:#78350f; flex: 0 0 60px;">Ctrl+C</button>
             <button class="btn" id="btn-select-region" style="flex: 0 0 100px;">Select Region</button>
             <div style="display: flex; align-items: center; gap: 4px; background: #333; padding: 0 8px; border-radius: 4px; font-size: 11px; flex: 0 0 auto;">
                 <span>Q:</span>
@@ -605,7 +606,8 @@
         document.querySelectorAll('.btn-key').forEach(btn => {
             btn.onclick = (e) => {
                 e.stopPropagation();
-                apiFetch('/api/key', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: btn.dataset.key }) }, btn);
+                const modifiers = btn.dataset.mod ? [btn.dataset.mod] : [];
+                apiFetch('/api/key', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: btn.dataset.key, modifiers }) }, btn);
             };
         });
 
