@@ -21,6 +21,7 @@ import {
 } from 'child_process';
 import fs from 'fs';
 import { attachRemote } from './remote-server.js';
+import diff from 'fast-diff';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -752,13 +753,47 @@ async function updateSnapshots() {
             if (snap) {
                 const hash = hashString(snap.html);
                 if (hash !== c.snapshotHash) {
+                    
+                    if (c.snapshot && c.snapshot.html) {
+                        try {
+                            const changes = diff(c.snapshot.html, snap.html);
+                            const patch = changes.map(op => {
+                                if (op[0] === 0) return [0, op[1].length];
+                                if (op[0] === -1) return [-1, op[1].length];
+                                return [1, op[1]];
+                            });
+
+                            const patchStr = JSON.stringify(patch);
+                            if (patchStr.length < snap.html.length) {
+                                broadcast({
+                                    type: 'snapshot_patch',
+                                    cascadeId: c.id,
+                                    patch: patch,
+                                    baseHash: c.snapshotHash,
+                                    newHash: hash,
+                                    bodyBg: snap.bodyBg
+                                });
+                            } else {
+                                broadcast({
+                                    type: 'snapshot_update',
+                                    cascadeId: c.id
+                                });
+                            }
+                        } catch (e) {
+                            broadcast({
+                                type: 'snapshot_update',
+                                cascadeId: c.id
+                            });
+                        }
+                    } else {
+                        broadcast({
+                            type: 'snapshot_update',
+                            cascadeId: c.id
+                        });
+                    }
+
                     c.snapshot = snap;
                     c.snapshotHash = hash;
-                    broadcast({
-                        type: 'snapshot_update',
-                        cascadeId: c.id
-                    });
-                    // console.log(`📸 Updated ${c.metadata.chatTitle}`);
                 }
             }
         } catch (e) {}
@@ -834,7 +869,10 @@ async function main() {
         if (!c || !c.snapshot) return res.status(404).json({
             error: 'Not found'
         });
-        res.json(c.snapshot);
+        res.json({
+            ...c.snapshot,
+            hash: c.snapshotHash
+        });
     });
 
     app.get('/styles/:id', (req, res) => {
@@ -1268,9 +1306,37 @@ async function main() {
                 try {
                     const snap = await captureHTML(c.cdp);
                     if (snap) {
+                        const hash = hashString(snap.html);
+                        if (c.snapshot && c.snapshot.html) {
+                            try {
+                                const changes = diff(c.snapshot.html, snap.html);
+                                const patch = changes.map(op => {
+                                    if (op[0] === 0) return [0, op[1].length];
+                                    if (op[0] === -1) return [-1, op[1].length];
+                                    return [1, op[1]];
+                                });
+
+                                const patchStr = JSON.stringify(patch);
+                                if (patchStr.length < snap.html.length) {
+                                    broadcast({
+                                        type: 'snapshot_patch',
+                                        cascadeId: c.id,
+                                        patch: patch,
+                                        baseHash: c.snapshotHash,
+                                        newHash: hash,
+                                        bodyBg: snap.bodyBg
+                                    });
+                                } else {
+                                    broadcast({ type: 'snapshot_update', cascadeId: c.id });
+                                }
+                            } catch (e) {
+                                broadcast({ type: 'snapshot_update', cascadeId: c.id });
+                            }
+                        } else {
+                            broadcast({ type: 'snapshot_update', cascadeId: c.id });
+                        }
                         c.snapshot = snap;
-                        c.snapshotHash = hashString(snap.html);
-                        broadcast({ type: 'snapshot_update', cascadeId: c.id });
+                        c.snapshotHash = hash;
                     }
                 } catch(e) {}
             }, 500);

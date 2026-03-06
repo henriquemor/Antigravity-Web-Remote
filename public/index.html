@@ -910,6 +910,8 @@
         let ws = null;
         let selectedManualContext = null; 
         let terminalLogs = { '1': '', '2': '' };
+        window.lastCascadeHtml = '';
+        window.lastCascadeHash = '';
 
         function showToast(msg, duration = 4000) {
             const existing = document.querySelector('.toast');
@@ -949,6 +951,40 @@
                 if (data.type === 'snapshot_update') {
                     if (data.cascadeId === currentCascadeId) {
                         updateContentOnly(currentCascadeId);
+                    }
+                }
+                if (data.type === 'snapshot_patch') {
+                    if (data.cascadeId === currentCascadeId) {
+                        // Check if we are in sync
+                        if (!window.lastCascadeHash || window.lastCascadeHash !== data.baseHash) {
+                            updateContentOnly(currentCascadeId);
+                            return;
+                        }
+                        
+                        let newHtml = '';
+                        let index = 0;
+                        try {
+                            for (const op of data.patch) {
+                                if (op[0] === 0) {
+                                    newHtml += window.lastCascadeHtml.substring(index, index + op[1]);
+                                    index += op[1];
+                                } else if (op[0] === -1) {
+                                    index += op[1];
+                                } else if (op[0] === 1) {
+                                    newHtml += op[1];
+                                }
+                            }
+                            
+                            window.lastCascadeHtml = newHtml;
+                            window.lastCascadeHash = data.newHash;
+                            
+                            const isAtBottom = chatContainer.scrollHeight - chatContainer.scrollTop - chatContainer.clientHeight < 50;
+                            document.body.style.backgroundColor = data.bodyBg || '#1a1a1a';
+                            chatContent.innerHTML = newHtml;
+                            if (isAtBottom) chatContainer.scrollTop = chatContainer.scrollHeight;
+                        } catch (e) {
+                            updateContentOnly(currentCascadeId);
+                        }
                     }
                 }
                 if (data.type === 'terminal:output') {
@@ -1802,7 +1838,28 @@
                             position: relative !important;
                             overflow: visible !important;
                         }
-                        
+
+                        /* Remover o bloco de review changes */
+                        div#conversation > div:nth-child(2) > div:nth-child(1) >  div:nth-child(1) > div:first-child{
+                            display:none !important;
+                        }
+
+                        /* Garante que os blocos de menção acompanhem o fluxo do texto */
+                        .context-scope-mention > span {
+                            display: inline-flex !important;
+                            vertical-align: baseline;
+                            white-space: normal !important; /* Evita que o bloco fique rígido demais */
+                        }
+
+                        /* Evita que a tag code quebre a linha se não houver necessidade real */
+                        code {
+                            white-space: normal !important; 
+                            display: inline !important;
+                        }
+
+
+
+
                         /* Ensure individual messages don't have absolute positioning offsets */
                         #cascade [class*="message"], #cascade [class*="monaco-list-row"] {
                             position: relative !important;
@@ -1869,6 +1926,9 @@
                 const res = await fetch(`/snapshot/${id}`);
                 if (!res.ok) throw new Error('Failed');
                 const data = await res.json();
+
+                window.lastCascadeHtml = data.html;
+                window.lastCascadeHash = data.hash;
 
                 // Preserve Scroll
                 const isAtBottom = chatContainer.scrollHeight - chatContainer.scrollTop - chatContainer
