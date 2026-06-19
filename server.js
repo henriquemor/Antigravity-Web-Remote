@@ -857,6 +857,34 @@ async function main() {
 
     app.get('/api/project-roots', (req, res) => {
         const roots = [...new Set(Array.from(cascades.values()).map(c => c.projectRoot).filter(Boolean))];
+        
+        // Scan C:\DEV and fallback to parent of REPO_ROOT if it exists
+        const pathsToScan = ['C:\\DEV'];
+        if (REPO_ROOT) {
+            const parentDir = dirname(REPO_ROOT);
+            if (parentDir && !pathsToScan.includes(parentDir)) {
+                pathsToScan.push(parentDir);
+            }
+        }
+
+        for (const scanPath of pathsToScan) {
+            try {
+                if (fs.existsSync(scanPath)) {
+                    const entries = fs.readdirSync(scanPath, { withFileTypes: true });
+                    for (const entry of entries) {
+                        if (entry.isDirectory()) {
+                            const fullPath = join(scanPath, entry.name);
+                            if (!roots.includes(fullPath)) {
+                                roots.push(fullPath);
+                            }
+                        }
+                    }
+                }
+            } catch (e) {
+                console.error(`Failed to scan ${scanPath}:`, e);
+            }
+        }
+
         // Ensure REPO_ROOT is also there if not already
         if (REPO_ROOT && !roots.includes(REPO_ROOT)) {
             roots.unshift(REPO_ROOT);

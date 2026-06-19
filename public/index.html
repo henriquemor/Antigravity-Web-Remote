@@ -194,6 +194,27 @@
             background: #2d3748;
             color: #fff;
         }
+
+        .remote-btn {
+            background: rgba(96, 165, 250, 0.1);
+            border: 1px solid rgba(96, 165, 250, 0.3);
+            color: #60a5fa;
+            padding: 4px 8px;
+            font-size: 11px;
+            border-radius: 4px;
+            cursor: pointer;
+            text-decoration: none;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .remote-btn:hover {
+            background: rgba(96, 165, 250, 0.2);
+            color: #fff;
+            border-color: rgba(96, 165, 250, 0.5);
+        }
         
         .cascade-tab {
             padding: 12px 16px;
@@ -784,6 +805,10 @@
             </div>
         </div>
 
+        <a href="/remote.html" target="_blank" class="remote-btn" title="Open Remote Screen in New Tab">
+            📱 Remote Screen
+        </a>
+
         <button class="restart-btn" onclick="restartServer()" title="Restart Backend Server">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
             Restart
@@ -1023,7 +1048,28 @@
         function renderTabs() {
             const selector = document.getElementById('cascadeSelector');
             if (cascades.length === 0) {
-                selector.innerHTML = '<option value="">No chats found</option>';
+                selector.innerHTML = '<option value="">No active chats</option>';
+                if (!['EXPLORER_VIEW', 'DIFF_VIEW', 'GIT_HISTORY_VIEW', 'TERMINAL_VIEW'].includes(currentCascadeId)) {
+                    chatContent.innerHTML = `
+                        <div class="no-vscode-connected" style="text-align: center; padding: 40px 20px; max-width: 500px; margin: auto; color: #ccc; font-family: system-ui, -apple-system, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 60vh;">
+                            <div style="font-size: 54px; margin-bottom: 20px;">📂</div>
+                            <h2 style="margin-bottom: 12px; color: #fff; font-weight: 600; font-size: 22px;">Standalone Mode</h2>
+                            <p style="font-size: 14px; line-height: 1.6; color: #aaa; margin-bottom: 24px; text-shadow: 0 1px 2px rgba(0,0,0,0.5);">
+                                VS Code is not connected. You can work directly on any local repository in <strong>C:\\DEV</strong>.
+                            </p>
+                            <div style="background: rgba(255,255,255,0.03); border-radius: 8px; padding: 18px; width: 100%; box-sizing: border-box; text-align: left; border: 1px solid rgba(255,255,255,0.08); margin-bottom: 24px; box-shadow: 0 4px 12px rgba(0,0,0,0.2);">
+                                <h3 style="margin-top: 0; font-size: 14px; color: #fff; margin-bottom: 10px; font-weight: 600;">How to use:</h3>
+                                <ol style="margin: 0; padding-left: 20px; font-size: 13px; color: #bbb; line-height: 1.8;">
+                                    <li>Select a workspace/repository in the <strong>Project Context</strong> dropdown at the top right.</li>
+                                    <li>Use the tabs (<strong>Explorer</strong>, <strong>Changes</strong>, <strong>Terminal</strong>) to manage files and run commands.</li>
+                                </ol>
+                            </div>
+                            <button onclick="switchView('EXPLORER_VIEW')" class="modern-btn" style="background: #007acc; color: white; border: none; padding: 12px 24px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px; box-shadow: 0 4px 10px rgba(0,122,204,0.3); transition: all 0.2s;">
+                                Open File Explorer
+                            </button>
+                        </div>
+                    `;
+                }
             } else {
                 selector.innerHTML = cascades.map(c => `
                     <option value="${c.id}" ${c.id === currentCascadeId ? 'selected' : ''}>
@@ -1045,7 +1091,6 @@
                     <option value="DIFF_VIEW" ${currentCascadeId === 'DIFF_VIEW' ? 'selected' : ''}>Changes</option>
                     <option value="GIT_HISTORY_VIEW" ${currentCascadeId === 'GIT_HISTORY_VIEW' ? 'selected' : ''}>Git History</option>
                     <option value="TERMINAL_VIEW" ${currentCascadeId === 'TERMINAL_VIEW' ? 'selected' : ''}>Terminal</option>
-                    <option value="REMOTE_VIEW">📱 Remote Screen</option>
                 </select>
                 <div class="modern-select-arrow" style="right: 4px;">
                     <svg viewBox="0 0 24 24"><path d="M7 10l5 5 5-5z"></path></svg>
@@ -1110,7 +1155,7 @@
 
         function switchView(view) {
             if (view === 'REMOTE_VIEW') {
-                window.location.href = '/remote.html';
+                window.open('/remote.html', '_blank');
                 // Revert selected option visually right after popup (in case user comes back)
                 const selector = document.getElementById('viewSelector');
                 if (selector) {
@@ -1373,7 +1418,7 @@
              } catch (e) {
                  container.innerHTML = `<div style="color:#ef4444">Failed: ${e.message}</div>`;
              }
-        }
+         }
 
         async function toggleCommitDetails(hash, message) {
             const el = document.getElementById(`commit-details-${hash}`);
@@ -1382,85 +1427,77 @@
             } else {
                 el.style.display = 'block';
                 if (!el.dataset.loaded) {
-                    const res = await fetch(`/git/commit-files?hash=${hash}&cascadeId=${getActiveId()}`);
-                    const data = await res.json();
-                    if (data.files) {
-                        // Pass message (escaped)
-                        const msgEscaped = message.replace(/'/g, "\\'");
-                        el.innerHTML = data.files.map(f => `
-                            <div style="display:flex; font-size:12px; padding:6px 0; cursor:pointer; color:#ccc; align-items:center;" onclick="showCommitDiff('${hash}', '${f.file}', '${msgEscaped}')">
-                                <span style="display:inline-block; width:24px; font-weight:bold; color:${f.status === 'M' ? '#fbbf24' : f.status === 'A' ? '#4ade80' : '#f87171'}">${f.status}</span>
-                                <span style="flex:1;">${f.file}</span>
-                            </div>
-                        `).join('');
-                        el.dataset.loaded = 'true';
+                    try {
+                        const root = await getProjectRoot();
+                        const res = await fetch(`/git/commit-files?hash=${hash}&path=${encodeURIComponent(root)}&cascadeId=${getActiveId()}`);
+                        const data = await res.json();
+                        if (data.files) {
+                            const msgEscaped = message.replace(/'/g, "\\'");
+                            el.innerHTML = data.files.map(f => `
+                                <div style="display:flex; font-size:12px; padding:6px 0; cursor:pointer; color:#ccc; align-items:center;" onclick="showCommitDiff('${hash}', '${f.file}', '${msgEscaped}')">
+                                    <span style="display:inline-block; width:24px; font-weight:bold; color:${f.status === 'M' ? '#fbbf24' : f.status === 'A' ? '#4ade80' : '#f87171'}">${f.status}</span>
+                                    <span style="flex:1;">${f.file}</span>
+                                </div>
+                            `).join('');
+                            el.dataset.loaded = 'true';
+                        }
+                    } catch(e) {
+                        el.innerHTML = `<div style="color:#ef4444; font-size:12px;">Failed: ${e.message}</div>`;
                     }
                 }
             }
         }
 
         async function showCommitDiff(hash, file, message) {
-            // Re-use Git Diff view but for commit
-            selectDiffTab(true); // Switch to Changes tab but SKIP loading status
-            
+            selectDiffTab(true);
             const contentEl = document.getElementById('gitContent');
             const listEl = document.getElementById('gitFileList');
             
-            // If we are already viewing this commit's context, don't reload the list
-            // We store the current commit hash in a data attribute to check
-            if (listEl.dataset.commitHash !== hash) {
-                listEl.dataset.commitHash = hash;
-                listEl.innerHTML = '<div class="loading">Loading commit files...</div>';
-
-                // Fetch files for this commit to populate the sidebar
-                try {
-                    const resFiles = await fetch(`/git/commit-files?hash=${hash}&cascadeId=${getActiveId()}`);
-                    const dataFiles = await resFiles.json();
-                    
-                    if (dataFiles.files) {
-                        const filesListHtml = dataFiles.files.map(f => `
-                            <div class="file-list-item ${f.file === file ? 'selected' : ''}" onclick="showCommitDiff('${hash}', '${f.file}', '${message.replace(/'/g, "\\'")}')">
-                                <span style="display:inline-block; width:20px; font-weight:bold; color:${f.status === 'M' ? '#fbbf24' : f.status === 'A' ? '#4ade80' : '#f87171'}">${f.status}</span>
-                                <span style="flex:1; overflow:hidden; text-overflow:ellipsis;">${f.file}</span>
-                            </div>
-                        `).join('');
-
-                        listEl.innerHTML = `
-                            <div style="padding:10px; color:#60a5fa; cursor:pointer; border-bottom:1px solid #333; margin-bottom:10px; font-weight:bold;" onclick="delete document.getElementById('gitFileList').dataset.commitHash; loadGitStatus()">
-                                ← Back to Working Changes
-                            </div>
-                            <div style="padding:10px; background:#222; border-radius:6px; border-left:4px solid #3b82f6; margin-bottom:10px;">
-                                <div style="font-family:monospace; color:#3b82f6; font-size:12px; margin-bottom:4px;">${hash.substring(0,7)}</div>
-                                <div style="font-weight:bold; color:#fff; font-size:12px; line-height:1.4; max-height:40px; overflow:hidden;">${message}</div>
-                            </div>
-                            <div style="overflow-y:auto; flex:1;">
-                                ${filesListHtml}
-                            </div>
-                        `;
-                    }
-                } catch(e) {
-                    listEl.innerHTML = `<div style="color:#ef4444">Failed to load file list: ${e.message}</div>`;
-                }
-            } else {
-                // Just update selection highlight
-                Array.from(listEl.querySelectorAll('.file-list-item')).forEach(el => el.classList.remove('selected'));
-                // Simple text match might be enough or add data-file attr
-                // For MVP just re-render is safer but let's try to be smart?
-                // Actually re-rendering the list is fast enough for <100 files. 
-                // But let's stick to the "don't reload if same hash" logic and just update styles if possible.
-                // For simplicity of this function, I'll just re-highlight based on text content if I can, 
-                // OR just let the user click. 
-                // Let's at least update the "selected" class manually
-                const items = listEl.querySelectorAll('.file-list-item');
-                items.forEach(item => {
-                    if (item.textContent.includes(file)) item.classList.add('selected'); // loose match
-                });
-            }
-
-            contentEl.innerHTML = '<div class="loading">Loading diff...</div>';
-            
             try {
-                const res = await fetch(`/git/diff-commit?hash=${hash}&file=${encodeURIComponent(file)}&cascadeId=${getActiveId()}`);
+                const root = await getProjectRoot();
+                if (listEl.dataset.commitHash !== hash) {
+                    listEl.dataset.commitHash = hash;
+                    listEl.innerHTML = '<div class="loading">Loading commit files...</div>';
+
+                    try {
+                        const resFiles = await fetch(`/git/commit-files?hash=${hash}&path=${encodeURIComponent(root)}&cascadeId=${getActiveId()}`);
+                        const dataFiles = await resFiles.json();
+                        
+                        if (dataFiles.files) {
+                            const filesListHtml = dataFiles.files.map(f => `
+                                <div class="file-list-item ${f.file === file ? 'selected' : ''}" onclick="showCommitDiff('${hash}', '${f.file}', '${message.replace(/'/g, "\\'")}')">
+                                    <span style="display:inline-block; width:20px; font-weight:bold; color:${f.status === 'M' ? '#fbbf24' : f.status === 'A' ? '#4ade80' : '#f87171'}">${f.status}</span>
+                                    <span style="flex:1; overflow:hidden; text-overflow:ellipsis;">${f.file}</span>
+                                </div>
+                            `).join('');
+
+                            listEl.innerHTML = `
+                                <div style="padding:10px; color:#60a5fa; cursor:pointer; border-bottom:1px solid #333; margin-bottom:10px; font-weight:bold;" onclick="delete document.getElementById('gitFileList').dataset.commitHash; loadGitStatus()">
+                                    ← Back to Working Changes
+                                </div>
+                                <div style="padding:10px; background:#222; border-radius:6px; border-left:4px solid #3b82f6; margin-bottom:10px;">
+                                    <div style="font-family:monospace; color:#3b82f6; font-size:12px; margin-bottom:4px;">${hash.substring(0,7)}</div>
+                                    <div style="font-weight:bold; color:#fff; font-size:12px; line-height:1.4; max-height:40px; overflow:hidden;">${message}</div>
+                                </div>
+                                <div style="overflow-y:auto; flex:1;">
+                                    ${filesListHtml}
+                                </div>
+                            `;
+                        }
+                    } catch(e) {
+                        listEl.innerHTML = `<div style="color:#ef4444">Failed to load file list: ${e.message}</div>`;
+                    }
+                } else {
+                    Array.from(listEl.querySelectorAll('.file-list-item')).forEach(el => el.classList.remove('selected'));
+                    const items = listEl.querySelectorAll('.file-list-item');
+                    items.forEach(item => {
+                        if (item.textContent.includes(file)) item.classList.add('selected');
+                    });
+                }
+
+                contentEl.innerHTML = '<div class="loading">Loading diff...</div>';
+                
+                const res = await fetch(`/git/diff-commit?hash=${hash}&file=${encodeURIComponent(file)}&path=${encodeURIComponent(root)}&cascadeId=${getActiveId()}`);
                 const data = await res.json();
                 if (data.diff) {
                     const html = data.diff.split('\n').map(l => {
@@ -1489,10 +1526,11 @@
         async function pushChanges() {
             showToast('Pushing...');
             try {
+                const path = await getProjectRoot();
                 const res = await fetch('/git/push', { 
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ cascadeId: getActiveId() })
+                    body: JSON.stringify({ path, cascadeId: getActiveId() })
                 });
                 const data = await res.json();
                 if (data.ok) showToast('<span style="color:#4ade80">✓ Push Successful</span>');
@@ -1502,12 +1540,13 @@
         }
 
         async function syncChanges() {
-             showToast('Syncing (Pull --rebase + Push)...');
+            showToast('Syncing (Pull --rebase + Push)...');
             try {
+                const path = await getProjectRoot();
                 const res = await fetch('/git/sync', { 
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ cascadeId: getActiveId() })
+                    body: JSON.stringify({ path, cascadeId: getActiveId() })
                 });
                 const data = await res.json();
                 if (data.ok) showToast('<span style="color:#4ade80">✓ Sync Successful</span>');
@@ -1519,7 +1558,6 @@
         async function loadGitStatus() {
             const listEl = document.getElementById('gitFileList');
             const contentEl = document.getElementById('gitContent');
-            const path = ''; // Default to root
             
             listEl.innerHTML = '<div class="loading">Checking git...</div>';
             contentEl.innerHTML = '';
@@ -1528,6 +1566,7 @@
 
             try {
                 const root = await getProjectRoot();
+                const path = root;
                 const res = await fetch(`/git/status?path=${encodeURIComponent(root)}&cascadeId=${getActiveId()}`);
                 const data = await res.json();
                 
@@ -1560,12 +1599,12 @@
                     if (indexStatus !== ' ' && indexStatus !== '?') {
                         hasStaged = true;
                         stagedHtml += `
-                            <div class="file-list-item" onclick="loadGitDiff('${file}', '${path}', true)">
+                            <div class="file-list-item" onclick="loadGitDiff('${file}', '', true)">
                                 <span class="file-status status-${indexStatus}">${indexStatus}</span>
                                 <span style="flex:1">${file}</span>
                                 <div class="file-actions">
-                                    <button class="action-btn" onclick="openEditor(event, '${file}', '${path}')">Edit</button>
-                                    <button class="action-btn unstage" onclick="unstageFile(event, '${file}', '${path}')">Unstage</button>
+                                    <button class="action-btn" onclick="openEditor(event, '${file}')">Edit</button>
+                                    <button class="action-btn unstage" onclick="unstageFile(event, '${file}')">Unstage</button>
                                 </div>
                             </div>
                         `;
@@ -1575,12 +1614,12 @@
                     if (workTreeStatus !== ' ' || statusVal === '??') {
                         const displayStatus = statusVal === '??' ? 'U' : workTreeStatus;
                         changedHtml += `
-                            <div class="file-list-item" onclick="loadGitDiff('${file}', '${path}', false)">
+                            <div class="file-list-item" onclick="loadGitDiff('${file}', '', false)">
                                 <span class="file-status status-${displayStatus || 'untracked'}">${displayStatus}</span>
                                 <span style="flex:1">${file}</span>
                                 <div class="file-actions">
-                                    <button class="action-btn" onclick="openEditor(event, '${file}', '${path}')">Edit</button>
-                                    <button class="action-btn stage" onclick="stageFile(event, '${file}', '${path}')">Stage</button>
+                                    <button class="action-btn" onclick="openEditor(event, '${file}')">Edit</button>
+                                    <button class="action-btn stage" onclick="stageFile(event, '${file}')">Stage</button>
                                 </div>
                             </div>
                         `;
@@ -1602,7 +1641,7 @@
                 commitSection.style.display = hasStaged ? 'flex' : 'none';
 
                 finalHtml += `
-                    <div class="file-list-item" onclick="loadGitDiff('', '${path}', false)" style="font-weight:bold; border-top: 1px solid #333; margin-top: 12px; padding-top: 12px; color: #60a5fa; justify-content: center;">
+                    <div class="file-list-item" onclick="loadGitDiff('', '', false)" style="font-weight:bold; border-top: 1px solid #333; margin-top: 12px; padding-top: 12px; color: #60a5fa; justify-content: center;">
                         <span>Show All Changes Diff</span>
                     </div>
                 `;
@@ -1713,9 +1752,10 @@
 
 
 
-        async function stageFile(e, file, path) {
+        async function stageFile(e, file) {
             e.stopPropagation();
             try {
+                const path = await getProjectRoot();
                 await fetch('/git/stage', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -1725,9 +1765,10 @@
             } catch (err) { alert(err.message); }
         }
 
-        async function unstageFile(e, file, path) {
+        async function unstageFile(e, file) {
             e.stopPropagation();
             try {
+                const path = await getProjectRoot();
                 await fetch('/git/unstage', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -1739,14 +1780,15 @@
 
         let editingFile = { name: '', path: '' };
 
-        async function openEditor(e, file, path) {
+        async function openEditor(e, file) {
             e.stopPropagation();
-            editingFile = { name: file, path: path };
-            document.getElementById('gitContent').style.display = 'none';
-            document.getElementById('editorView').style.display = 'block';
-            document.getElementById('editingFileName').innerText = `Editing: ${file}`;
-            
             try {
+                const path = await getProjectRoot();
+                editingFile = { name: file, path: path };
+                document.getElementById('gitContent').style.display = 'none';
+                document.getElementById('editorView').style.display = 'block';
+                document.getElementById('editingFileName').innerText = `Editing: ${file}`;
+                
                 const res = await fetch(`/git/read?file=${encodeURIComponent(file)}&path=${encodeURIComponent(path)}&cascadeId=${getActiveId()}`);
                 const data = await res.json();
                 document.getElementById('rawEditor').value = data.content;
@@ -1778,7 +1820,7 @@
 
         async function commitChanges() {
             const msg = document.getElementById('commitMsg').value;
-            const path = ''; // Default to root
+            const path = await getProjectRoot();
             if (!msg) return alert("Please enter a commit message");
             
             try {
