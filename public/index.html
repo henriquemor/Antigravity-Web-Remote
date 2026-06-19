@@ -776,7 +776,7 @@
 
     <div class="app-header">
         <!-- Target Chat Selector -->
-        <div class="modern-select-wrapper" style="flex: 1.5; max-width: 250px;">
+        <div id="cascadeSelectorWrapper" class="modern-select-wrapper" style="flex: 1.5; max-width: 250px;">
             <select id="cascadeSelector" class="modern-select primary" onchange="selectCascade(this.value)">
                 <option value="">Loading Chats...</option>
             </select>
@@ -806,7 +806,7 @@
         </div>
 
         <a href="/remote.html" target="_blank" class="remote-btn" title="Open Remote Screen in New Tab">
-            📱 Remote Screen
+            📱
         </a>
 
         <button class="restart-btn" onclick="restartServer()" title="Restart Backend Server">
@@ -1047,7 +1047,9 @@
 
         function renderTabs() {
             const selector = document.getElementById('cascadeSelector');
+            const wrapper = document.getElementById('cascadeSelectorWrapper');
             if (cascades.length === 0) {
+                if (wrapper) wrapper.style.display = 'none';
                 selector.innerHTML = '<option value="">No active chats</option>';
                 if (!['EXPLORER_VIEW', 'DIFF_VIEW', 'GIT_HISTORY_VIEW', 'TERMINAL_VIEW'].includes(currentCascadeId)) {
                     chatContent.innerHTML = `
@@ -1071,6 +1073,7 @@
                     `;
                 }
             } else {
+                if (wrapper) wrapper.style.display = 'block';
                 selector.innerHTML = cascades.map(c => `
                     <option value="${c.id}" ${c.id === currentCascadeId ? 'selected' : ''}>
                         ${c.title || 'Untitled'} ${c.active ? ' (Active)' : ''}
